@@ -6,6 +6,9 @@ package libkademlia
 
 import (
 	"net"
+	"fmt"
+	"container/list"
+
 )
 
 type KademliaRPC struct {
@@ -35,8 +38,32 @@ type PongMessage struct {
 func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
 	pong.MsgID = CopyID(ping.MsgID)
+
+	// storeRequest = StoreRequest {
+	// 	Sender: ping.Sender,
+	// 	MsgID:	CopyID(ping.MsgID),
+	// 	Key:		CopyID(ping.Sender.NodeID),
+	// }
+
 	// Specify the sender
 	// Update contact, etc
+
+  // TODO: CopyID or reference directly?
+	distance := k.kademlia.SelfContact.NodeID.Xor(ping.Sender.NodeID)
+	bucketIdx := distance.PrefixLen()
+	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+
+	bucket := k.kademlia.Table.Buckets[bucketIdx]
+	contactsList := bucket.ContactsList
+
+	contactsList = list.New()
+
+	contactsList.PushBack("a")
+	for e := contactsList.Front(); e != nil; e = e.Next() {
+		// contact := Contact(e.Value)
+		fmt.Println(e.Value)
+	}
+
 	return nil
 }
 
