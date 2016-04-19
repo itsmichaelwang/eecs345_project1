@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"strconv"
+	"container/list"
 )
 
 const (
@@ -20,8 +21,17 @@ const (
 
 // Kademlia type. You can put whatever state you need in this.
 type Kademlia struct {
-	NodeID      ID
-	SelfContact Contact
+	NodeID      	ID
+	SelfContact 	Contact
+	Table					RoutingTable
+}
+
+type RoutingTable struct {
+	Buckets 			[b]Bucket
+}
+
+type Bucket struct {
+	ContactsList 	*list.List
 }
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
@@ -29,6 +39,9 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k.NodeID = nodeID
 
 	// TODO: Initialize other state here as you add functionality.
+	for _, bucket := range k.Table.Buckets {
+		bucket.ContactsList = list.New()
+	}
 
 	// Set up RPC server
 	// NOTE: KademliaRPC is just a wrapper around Kademlia. This type includes
