@@ -7,8 +7,6 @@ package libkademlia
 import (
 	"net"
 	"fmt"
-	"container/list"
-
 )
 
 type KademliaRPC struct {
@@ -52,16 +50,16 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	distance := k.kademlia.SelfContact.NodeID.Xor(ping.Sender.NodeID)
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+	fmt.Println("Self ID: ", k.kademlia.SelfContact.NodeID.AsString())
+	fmt.Println("Ping ID: ", ping.Sender.NodeID.AsString())
+	fmt.Println(bucketIdx)
 
-	bucket := k.kademlia.Table.Buckets[bucketIdx]
-	contactsList := bucket.ContactsList
-
-	contactsList = list.New()
-
-	contactsList.PushBack("a")
-	for e := contactsList.Front(); e != nil; e = e.Next() {
-		// contact := Contact(e.Value)
-		fmt.Println(e.Value)
+	if bucketIdx >= 0 {
+		bucket := k.kademlia.Table.Buckets[bucketIdx]
+		bucket.PushBack(ping.Sender)
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			fmt.Println(e.Value)
+		}
 	}
 
 	return nil

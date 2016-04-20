@@ -27,20 +27,17 @@ type Kademlia struct {
 }
 
 type RoutingTable struct {
-	Buckets 			[b]Bucket
+	Buckets 			[b]*list.List //160 lists
 }
 
-type Bucket struct {
-	ContactsList 	*list.List
-}
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
 	k.NodeID = nodeID
 
 	// TODO: Initialize other state here as you add functionality.
-	for _, bucket := range k.Table.Buckets {
-		bucket.ContactsList = list.New()
+	for index, _ := range k.Table.Buckets {
+		k.Table.Buckets[index] = list.New()
 	}
 
 	// Set up RPC server

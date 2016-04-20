@@ -63,6 +63,8 @@ func main() {
 	// TODO: Replace this with a call to your completed DoPing!
 	ping := new(libkademlia.PingMessage)
 	ping.MsgID = libkademlia.NewRandomID()
+	ping.Sender = kadem.SelfContact
+	
 	var pong libkademlia.PongMessage
 	err = client.Call("KademliaRPC.Ping", ping, &pong)
 	if err != nil {
