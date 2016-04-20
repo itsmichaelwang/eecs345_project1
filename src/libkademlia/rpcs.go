@@ -37,18 +37,12 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
 	fmt.Println("RPC Ping got called")
 	pong.MsgID = CopyID(ping.MsgID)
-	pong.Sender = k.kademlia.SelfContact
-	// storeRequest = StoreRequest {
-	// 	Sender: ping.Sender,
-	// 	MsgID:	CopyID(ping.MsgID),
-	// 	Key:		CopyID(ping.Sender.NodeID),
-	// }
-
 	// Specify the sender
+	pong.Sender = k.kademlia.SelfContact
 	// Update contact, etc
-
-  // TODO: CopyID or reference directly?
+	// TODO: CopyID or reference directly?
 	k.kademlia.Update(&ping.Sender)
+	
 	return nil
 	
 }

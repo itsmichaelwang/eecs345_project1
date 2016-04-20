@@ -53,7 +53,7 @@ func main() {
 	hostname, port, err := net.SplitHostPort(firstPeerStr)
 	log.Println("firstPeerStr:", firstPeerStr, "hostname:",hostname, "port:", port, "RPCPath:",rpc.DefaultRPCPath+hostname+port)
 	client, err := rpc.DialHTTPPath("tcp", firstPeerStr,
-		rpc.DefaultRPCPath+hostname+port)
+		rpc.DefaultRPCPath+port)
 	if err != nil {
 		log.Fatal("DialHTTP: ", err)
 	}
