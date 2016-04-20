@@ -35,8 +35,9 @@ type PongMessage struct {
 
 func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
+	fmt.Println("RPC Ping got called")
 	pong.MsgID = CopyID(ping.MsgID)
-
+	pong.Sender = k.kademlia.SelfContact
 	// storeRequest = StoreRequest {
 	// 	Sender: ping.Sender,
 	// 	MsgID:	CopyID(ping.MsgID),
@@ -47,22 +48,9 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// Update contact, etc
 
   // TODO: CopyID or reference directly?
-	distance := k.kademlia.SelfContact.NodeID.Xor(ping.Sender.NodeID)
-	bucketIdx := distance.PrefixLen()
-	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
-	fmt.Println("Self ID: ", k.kademlia.SelfContact.NodeID.AsString())
-	fmt.Println("Ping ID: ", ping.Sender.NodeID.AsString())
-	fmt.Println(bucketIdx)
-
-	if bucketIdx >= 0 {
-		bucket := k.kademlia.Table.Buckets[bucketIdx]
-		bucket.PushBack(ping.Sender)
-		for e := bucket.Front(); e != nil; e = e.Next() {
-			fmt.Println(e.Value)
-		}
-	}
-
+	k.kademlia.Update(&ping.Sender)
 	return nil
+	
 }
 
 ///////////////////////////////////////////////////////////////////////////////

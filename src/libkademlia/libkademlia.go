@@ -97,6 +97,27 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	return nil, &ContactNotFoundError{nodeId, "Not found"}
 }
 
+func (k *Kademlia) Update(contact *Contact) error {
+	// TODO: Implement
+	distance := k.SelfContact.NodeID.Xor(contact.NodeID)
+	bucketIdx := distance.PrefixLen()
+	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+
+	fmt.Println("Self ID: ", k.SelfContact.NodeID.AsString())
+	fmt.Println("Updated ID: ", contact.NodeID.AsString())
+	fmt.Println("In bucket:", bucketIdx)
+
+	if bucketIdx >= 0 {
+		bucket := k.Table.Buckets[bucketIdx]
+		bucket.PushBack(contact)
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			fmt.Println(e.Value)
+		}
+	}
+
+	return nil
+}
+
 type CommandFailed struct {
 	msg string
 }
