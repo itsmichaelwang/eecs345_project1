@@ -51,6 +51,7 @@ func main() {
 	// Your code should loop forever, reading instructions from stdin and
 	// printing their results to stdout. See README.txt for more details.
 	hostname, port, err := net.SplitHostPort(firstPeerStr)
+	log.Println("firstPeerStr:", firstPeerStr, "hostname:",hostname, "port:", port, "RPCPath:",rpc.DefaultRPCPath+hostname+port)
 	client, err := rpc.DialHTTPPath("tcp", firstPeerStr,
 		rpc.DefaultRPCPath+hostname+port)
 	if err != nil {
@@ -64,7 +65,7 @@ func main() {
 	ping := new(libkademlia.PingMessage)
 	ping.MsgID = libkademlia.NewRandomID()
 	ping.Sender = kadem.SelfContact
-	
+
 	var pong libkademlia.PongMessage
 	err = client.Call("KademliaRPC.Ping", ping, &pong)
 	if err != nil {

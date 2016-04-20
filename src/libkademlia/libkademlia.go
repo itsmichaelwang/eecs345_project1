@@ -107,6 +107,30 @@ func (e *CommandFailed) Error() string {
 
 func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 	// TODO: Implement
+	hostnames,_:=net.LookupAddr(host.String())
+	hostname := hostnames[0]
+	portString := strconv.Itoa(int(port))
+	log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+hostname+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	log.Printf("Pinging initial peer from DoPing\n")
+
+	ping := new(PingMessage)
+	ping.MsgID = NewRandomID()
+	ping.Sender = k.SelfContact
+	
+	var pong PongMessage
+	err = client.Call("KademliaRPC.Ping", ping, &pong)
+	if err != nil {
+		log.Fatal("Call: ", err)
+	}
+	log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
+	log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
+
 	return nil, &CommandFailed{
 		"Unable to ping " + fmt.Sprintf("%s:%v", host.String(), port)}
 }
