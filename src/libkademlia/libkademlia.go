@@ -11,6 +11,7 @@ import (
 	"net/rpc"
 	"strconv"
 	"container/list"
+	"time"
 )
 
 const (
@@ -97,21 +98,50 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	return nil, &ContactNotFoundError{nodeId, "Not found"}
 }
 
-func (k *Kademlia) Update(contact *Contact) error {
+func (kadem *Kademlia) Update(contact *Contact) error {
 	// TODO: Implement
-	distance := k.SelfContact.NodeID.Xor(contact.NodeID)
+	distance := kadem.SelfContact.NodeID.Xor(contact.NodeID)
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-	fmt.Println("Self ID: ", k.SelfContact.NodeID.AsString())
+	fmt.Println("Self ID: ", kadem.SelfContact.NodeID.AsString())
 	fmt.Println("Updated ID: ", contact.NodeID.AsString())
 	fmt.Println("In bucket:", bucketIdx)
 
-	if bucketIdx >= 0 {
-		bucket := k.Table.Buckets[bucketIdx]
-		bucket.PushBack(contact)
+	if bucketIdx >= 0 && !kadem.SelfContact.NodeID.Equals(contact.NodeID){
+		bucket := kadem.Table.Buckets[bucketIdx]
+		contactExists := false
+
 		for e := bucket.Front(); e != nil; e = e.Next() {
-			fmt.Println(e.Value)
+			elementID := (e.Value.(*Contact)).NodeID
+			fmt.Println(elementID.AsString())
+			//If the contact exists, move the contact to the end of the k-bucket.
+			if elementID.Equals(contact.NodeID){
+				contactExists = true
+				bucket.MoveToBack(e)
+				break
+			}
+		}
+
+		if !contactExists && bucket.Len() < k{
+			//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
+			bucket.PushBack(contact)
+		} else if !contactExists && bucket.Len() >= k {
+			//If the contact does not exist and the k-bucket is full: ping the least recently contacted node (at the head of the k-bucket), if that contact fails to respond, drop it and append new contact to tail, otherwise ignore the new contact and update least recently seen contact.
+			frontNode := bucket.Front().Value.(*Contact)
+			fmt.Println(frontNode.NodeID.AsString())
+
+			//timeout code
+			timeout := make(chan bool, 1)
+			go func() {
+			    time.Sleep(1 * time.Second)
+			    timeout <- true
+			}()
+			select {
+			case <-timeout:
+			    // the read from ch has timed out
+			}
+
 		}
 	}
 
