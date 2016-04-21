@@ -41,7 +41,8 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	pong.Sender = k.kademlia.SelfContact
 	// Update contact, etc
 	// TODO: CopyID or reference directly?
-	k.kademlia.Update(&ping.Sender)
+	updateContactChannel <-&(ping.Sender)
+	
 	
 	return nil
 	

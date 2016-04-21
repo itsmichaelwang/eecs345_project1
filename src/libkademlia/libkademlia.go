@@ -32,8 +32,9 @@ type RoutingTable struct {
 	Buckets 			[b]*list.List //160 lists
 }
 
-var findContactChannel = make(chan Contact)
-var updateContactChannel = make(chan Contact)
+var findContactIncomingChan = make(chan ID)
+var findContactOutgoingChan = make(chan *Contact)
+var updateContactChannel = make(chan *Contact)
 var storeReqChannel = make(chan StoreRequest)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
@@ -44,7 +45,7 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 		k.Table.Buckets[index] = list.New()
 	}
 
-	go KBucketManager()
+	go KBucketManager(k)
 	go DataStoreManager(k.DataStore)
 
 	// Set up RPC server
@@ -96,36 +97,58 @@ func (e *ContactNotFoundError) Error() string {
 }
 
 func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
+
 	// TODO: Search through contacts, find specified ID
 	// Find contact with provided ID
 	if nodeId == k.SelfContact.NodeID {
 		return &k.SelfContact, nil
 	}
+	findContactIncomingChan <- nodeId
 
-	distance := k.SelfContact.NodeID.Xor(nodeId)
-	bucketIdx := distance.PrefixLen()
-	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
-
-	if bucketIdx >= 0 {
-		bucket := k.Table.Buckets[bucketIdx]
-		for e := bucket.Front(); e != nil; e = e.Next() {
-			elementID := (e.Value.(*Contact)).NodeID
-			fmt.Println(elementID.AsString())
-			if elementID.Equals(nodeId){
-				return e.Value.(*Contact), nil
-				//TODO: might need to pass this to a go routine later 
-				//bucket.MoveToBack(e)
-			}
-		}
-	}
-
-	return nil, &ContactNotFoundError{nodeId, "Not found"}
+	for{
+        select{
+        case foundContact := <-findContactOutgoingChan:
+        	if foundContact != nil{
+        		return foundContact, nil
+        	}else{
+        		return nil, &ContactNotFoundError{nodeId, "Not found"} 
+        	}
+        default:
+            //do nothing
+        }
+    }
+	
 }
 
 
-func KBucketManager() {
+func KBucketManager(k *Kademlia) {
     for{
         select{
+        case requestedContactID := <-findContactIncomingChan:
+        	distance := k.SelfContact.NodeID.Xor(requestedContactID)
+			bucketIdx := distance.PrefixLen()
+			bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+
+			if bucketIdx >= 0 {
+				bucket := k.Table.Buckets[bucketIdx]
+				contactFound := false
+				for e := bucket.Front(); e != nil; e = e.Next() {
+					elementID := (e.Value.(*Contact)).NodeID
+					fmt.Println(elementID.AsString())
+					if elementID.Equals(requestedContactID){
+						contactFound =true
+						findContactOutgoingChan <- e.Value.(*Contact)
+						break
+						//TODO: might need to pass this to a go routine later 
+						//bucket.MoveToBack(e)
+					}
+				}
+				if(!contactFound){
+					findContactOutgoingChan <- nil
+				}
+			}
+        case contactToBeUpdated := <-updateContactChannel:
+        	k.Update(contactToBeUpdated)
         default:
             //do nothing
         }
