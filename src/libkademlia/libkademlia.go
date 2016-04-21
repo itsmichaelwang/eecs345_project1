@@ -24,22 +24,28 @@ const (
 type Kademlia struct {
 	NodeID      	ID
 	SelfContact 	Contact
-	Table					RoutingTable
+	Table			RoutingTable
+	DataStore 		map[ID][]byte
 }
 
 type RoutingTable struct {
 	Buckets 			[b]*list.List //160 lists
 }
 
+var findContactChannel = make(chan Contact)
+var updateContactChannel = make(chan Contact)
+var storeReqChannel = make(chan StoreRequest)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
 	k.NodeID = nodeID
-
 	// TODO: Initialize other state here as you add functionality.
 	for index, _ := range k.Table.Buckets {
 		k.Table.Buckets[index] = list.New()
 	}
+
+	go KBucketManager()
+	go DataStoreManager(k.DataStore)
 
 	// Set up RPC server
 	// NOTE: KademliaRPC is just a wrapper around Kademlia. This type includes
@@ -95,7 +101,49 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	if nodeId == k.SelfContact.NodeID {
 		return &k.SelfContact, nil
 	}
+
+	distance := k.SelfContact.NodeID.Xor(nodeId)
+	bucketIdx := distance.PrefixLen()
+	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+
+	if bucketIdx >= 0 {
+		bucket := k.Table.Buckets[bucketIdx]
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			elementID := (e.Value.(*Contact)).NodeID
+			fmt.Println(elementID.AsString())
+			if elementID.Equals(nodeId){
+				return e.Value.(*Contact), nil
+				//TODO: might need to pass this to a go routine later 
+				//bucket.MoveToBack(e)
+			}
+		}
+	}
+
 	return nil, &ContactNotFoundError{nodeId, "Not found"}
+}
+
+
+func KBucketManager() {
+    for{
+        select{
+        default:
+            //do nothing
+        }
+    }
+}
+
+
+func DataStoreManager(dataStore map[ID][]byte) {
+	dataStore = make(map[ID][]byte)
+	for{
+        select{
+        case storeReq := <-storeReqChannel:
+        	dataStore[storeReq.Key] = storeReq.Value
+        	fmt.Println("stored stuff", string(dataStore[storeReq.Key]))
+        default:
+            //do nothing
+        }
+    }
 }
 
 func (kadem *Kademlia) Update(contact *Contact) error {
@@ -104,28 +152,23 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-	fmt.Println("Self ID: ", kadem.SelfContact.NodeID.AsString())
-	fmt.Println("Updated ID: ", contact.NodeID.AsString())
-	fmt.Println("In bucket:", bucketIdx)
-
-	if bucketIdx >= 0 && !kadem.SelfContact.NodeID.Equals(contact.NodeID){
+	if bucketIdx >= 0 {
 		bucket := kadem.Table.Buckets[bucketIdx]
 		contactExists := false
-
 		for e := bucket.Front(); e != nil; e = e.Next() {
 			elementID := (e.Value.(*Contact)).NodeID
 			fmt.Println(elementID.AsString())
-			//If the contact exists, move the contact to the end of the k-bucket.
 			if elementID.Equals(contact.NodeID){
 				contactExists = true
+				//TODO: might need to pass this to a go routine later 
 				bucket.MoveToBack(e)
 				break
 			}
 		}
 
 		if !contactExists && bucket.Len() < k{
-			//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
-			bucket.PushBack(contact)
+		//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
+		bucket.PushBack(contact)
 		} else if !contactExists && bucket.Len() >= k {
 			//If the contact does not exist and the k-bucket is full: ping the least recently contacted node (at the head of the k-bucket), if that contact fails to respond, drop it and append new contact to tail, otherwise ignore the new contact and update least recently seen contact.
 			frontNode := bucket.Front().Value.(*Contact)
@@ -183,13 +226,36 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 	log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
 	log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
 
-	return nil, &CommandFailed{
-		"Unable to ping " + fmt.Sprintf("%s:%v", host.String(), port)}
+	return &pong.Sender, nil
+	//return nil, &CommandFailed{"Unable to ping " + fmt.Sprintf("%s:%v", host.String(), port)}
 }
 
 func (k *Kademlia) DoStore(contact *Contact, key ID, value []byte) error {
 	// TODO: Implement
-	return &CommandFailed{"Not implemented"}
+	fmt.Printf("Inside Do Store with Contact ID:", contact.NodeID.AsString(), "contact:", contact)
+
+	hostname:=contact.Host.String()
+	portString := strconv.Itoa(int(contact.Port))
+	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	StoreReq := new(StoreRequest)
+	StoreReq.MsgID = NewRandomID()
+	StoreReq.Sender = k.SelfContact
+	StoreReq.Key = key
+	StoreReq.Value = value
+	
+	var StoreRes StoreResult
+	err = client.Call("KademliaRPC.Store", StoreReq, &StoreRes)
+	if err != nil {
+		log.Fatal("Call: ", err)
+	}
+
+	return nil
 }
 
 func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error) {

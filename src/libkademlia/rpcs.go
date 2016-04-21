@@ -64,6 +64,8 @@ type StoreResult struct {
 
 func (k *KademliaRPC) Store(req StoreRequest, res *StoreResult) error {
 	// TODO: Implement.
+	fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
+	storeReqChannel <- req
 	return nil
 }
 
