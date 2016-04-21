@@ -7,8 +7,6 @@ package libkademlia
 import (
 	"net"
 	"fmt"
-	"container/list"
-
 )
 
 type KademliaRPC struct {
@@ -37,34 +35,16 @@ type PongMessage struct {
 
 func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
+	fmt.Println("RPC Ping got called")
 	pong.MsgID = CopyID(ping.MsgID)
-
-	// storeRequest = StoreRequest {
-	// 	Sender: ping.Sender,
-	// 	MsgID:	CopyID(ping.MsgID),
-	// 	Key:		CopyID(ping.Sender.NodeID),
-	// }
-
 	// Specify the sender
+	pong.Sender = k.kademlia.SelfContact
 	// Update contact, etc
-
-  // TODO: CopyID or reference directly?
-	distance := k.kademlia.SelfContact.NodeID.Xor(ping.Sender.NodeID)
-	bucketIdx := distance.PrefixLen()
-	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
-
-	bucket := k.kademlia.Table.Buckets[bucketIdx]
-	contactsList := bucket.ContactsList
-
-	contactsList = list.New()
-
-	contactsList.PushBack("a")
-	for e := contactsList.Front(); e != nil; e = e.Next() {
-		// contact := Contact(e.Value)
-		fmt.Println(e.Value)
-	}
-
+	// TODO: CopyID or reference directly?
+	k.kademlia.Update(&ping.Sender)
+	
 	return nil
+	
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -84,6 +64,8 @@ type StoreResult struct {
 
 func (k *KademliaRPC) Store(req StoreRequest, res *StoreResult) error {
 	// TODO: Implement.
+	fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
+	storeReqChannel <- req
 	return nil
 }
 
