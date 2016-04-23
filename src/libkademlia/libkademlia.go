@@ -36,6 +36,10 @@ var findContactIncomingChan = make(chan ID)
 var findContactOutgoingChan = make(chan *Contact)
 var updateContactChannel = make(chan *Contact)
 var storeReqChannel = make(chan StoreRequest)
+var findValueIncomingChannel = make(chan FindValueRequest)
+var findValueOutgoingChannel = make(chan []byte)
+var findNodeIncomingChannel = make(chan ID)
+var findNodeOutgoingChannel = make(chan []Contact)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
@@ -105,18 +109,12 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	}
 	findContactIncomingChan <- nodeId
 
-	for{
-        select{
-        case foundContact := <-findContactOutgoingChan:
-        	if foundContact != nil{
-        		return foundContact, nil
-        	}else{
-        		return nil, &ContactNotFoundError{nodeId, "Not found"} 
-        	}
-        default:
-            //do nothing
-        }
-    }
+	foundContact := <-findContactOutgoingChan
+	if foundContact != nil{
+		return foundContact, nil
+	}else{
+		return nil, &ContactNotFoundError{nodeId, "Not found"} 
+	}
 	
 }
 
@@ -163,6 +161,12 @@ func DataStoreManager(dataStore map[ID][]byte) {
         case storeReq := <-storeReqChannel:
         	dataStore[storeReq.Key] = storeReq.Value
         	fmt.Println("stored stuff", string(dataStore[storeReq.Key]))
+        case findValueReq := <- findValueIncomingChannel:
+        	if value, found := dataStore[findValueReq.Key]; found {
+			    findValueOutgoingChannel <- value
+			}else{
+				findNodeIncomingChannel <- findValueReq.Key
+			}
         default:
             //do nothing
         }
@@ -242,14 +246,18 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 	ping.Sender = k.SelfContact
 	
 	var pong PongMessage
-	err = client.Call("KademliaRPC.Ping", ping, &pong)
-	if err != nil {
-		log.Fatal("Call: ", err)
+	callRes := client.Go("KademliaRPC.Ping", ping, &pong, nil)
+	select {
+	  case <-callRes.Done:
+	    // do what you need with test.CallReply
+	    log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
+		log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
+	    return &pong.Sender, nil
+	  case <-time.After(5 * time.Second):
+	    // handle call failing
+	    return nil, &CommandFailed{"Timeout"}
 	}
-	log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
-	log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
 
-	return &pong.Sender, nil
 	//return nil, &CommandFailed{"Unable to ping " + fmt.Sprintf("%s:%v", host.String(), port)}
 }
 
@@ -289,7 +297,29 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 func (k *Kademlia) DoFindValue(contact *Contact,
 	searchKey ID) (value []byte, contacts []Contact, err error) {
 	// TODO: Implement
-	return nil, nil, &CommandFailed{"Not implemented"}
+	fmt.Printf("Inside Do Find Value")
+
+	hostname:=contact.Host.String()
+	portString := strconv.Itoa(int(contact.Port))
+	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	FindValReq := new(FindValueRequest)
+	FindValReq.MsgID = NewRandomID()
+	FindValReq.Sender = k.SelfContact
+	FindValReq.Key = searchKey
+	
+	var FindValRes FindValueResult
+	err = client.Call("KademliaRPC.FindValue", FindValReq, &FindValRes)
+	if err != nil {
+		log.Fatal("Call: ", err)
+	}
+
+	return FindValRes.Value, FindValRes.Nodes, FindValRes.Err
 }
 
 func (k *Kademlia) LocalFindValue(searchKey ID) ([]byte, error) {
