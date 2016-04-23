@@ -127,6 +127,8 @@ func KBucketManager(k *Kademlia) {
 			bucketIdx := distance.PrefixLen()
 			bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
+			fmt.Println("Finding contact:", requestedContactID.AsString(), "In bucket: ", bucketIdx)
+
 			if bucketIdx >= 0 {
 				bucket := k.Table.Buckets[bucketIdx]
 				contactFound := false
@@ -142,6 +144,7 @@ func KBucketManager(k *Kademlia) {
 					}
 				}
 				if(!contactFound){
+					fmt.Println("couldn't find contact")
 					findContactOutgoingChan <- nil
 				}
 			}
@@ -174,10 +177,13 @@ func DataStoreManager(dataStore map[ID][]byte) {
 }
 
 func (kadem *Kademlia) Update(contact *Contact) error {
+	
 	// TODO: Implement
 	distance := kadem.SelfContact.NodeID.Xor(contact.NodeID)
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
+
+	fmt.Println("Updating with contact:", contact.NodeID.AsString(), "In bucket: ", bucketIdx)
 
 	if bucketIdx >= 0 {
 		bucket := kadem.Table.Buckets[bucketIdx]
@@ -194,22 +200,23 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 		}
 
 		if !contactExists && bucket.Len() < k{
+
 		//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
-		bucket.PushBack(contact)
+			bucket.PushBack(contact)
+			fmt.Println("Inside Update")
+			for e := bucket.Front(); e != nil; e = e.Next() {
+				elementID := (e.Value.(*Contact)).NodeID
+				fmt.Println(elementID.AsString())
+			}
 		} else if !contactExists && bucket.Len() >= k {
 			//If the contact does not exist and the k-bucket is full: ping the least recently contacted node (at the head of the k-bucket), if that contact fails to respond, drop it and append new contact to tail, otherwise ignore the new contact and update least recently seen contact.
 			frontNode := bucket.Front().Value.(*Contact)
 			fmt.Println(frontNode.NodeID.AsString())
-
-			//timeout code
-			timeout := make(chan bool, 1)
-			go func() {
-			    time.Sleep(1 * time.Second)
-			    timeout <- true
-			}()
-			select {
-			case <-timeout:
-			    // the read from ch has timed out
+			_, err := kadem.DoPing(frontNode.Host, frontNode.Port)
+			if err != nil{
+				//we didn't get a response
+				bucket.Remove(bucket.Front())
+				bucket.PushBack(contact)
 			}
 
 		}
@@ -252,7 +259,9 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 	    // do what you need with test.CallReply
 	    log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
 		log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
-	    return &pong.Sender, nil
+		fmt.Println("received pong from: ", pong.Sender.NodeID.AsString())
+		updateContactChannel <- &(pong.Sender)
+	    return &(pong.Sender), nil
 	  case <-time.After(5 * time.Second):
 	    // handle call failing
 	    return nil, &CommandFailed{"Timeout"}

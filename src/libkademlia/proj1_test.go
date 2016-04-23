@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"fmt"
 	//"time"
 )
 
@@ -31,6 +32,8 @@ func StringToIpPort(laddr string) (ip net.IP, port uint16, err error) {
 func TestPing(t *testing.T) {
 	instance1 := NewKademlia("localhost:7890")
 	instance2 := NewKademlia("localhost:7891")
+	fmt.Println("Instance1:" , instance1.SelfContact.NodeID.AsString())
+	fmt.Println("Instance2:" , instance2.SelfContact.NodeID.AsString())
 	host2, port2, _ := StringToIpPort("localhost:7891")
 	contact2, err := instance2.FindContact(instance2.NodeID)
 	if err != nil {
