@@ -87,6 +87,7 @@ type FindNodeResult struct {
 
 func (k *KademliaRPC) FindNode(req FindNodeRequest, res *FindNodeResult) error {
 	// TODO: Implement.
+	findNodeIncomingChannel <- req.NodeID
 	return nil
 }
 
@@ -110,6 +111,23 @@ type FindValueResult struct {
 
 func (k *KademliaRPC) FindValue(req FindValueRequest, res *FindValueResult) error {
 	// TODO: Implement.
+	fmt.Println("RPC FindValue got called from Sender", req.Sender.NodeID.AsString())
+	findValueIncomingChannel <- req
+
+	select{
+        case foundValue := <-findValueOutgoingChannel:
+        	if foundValue != nil{
+        		res.MsgID = CopyID(req.MsgID)
+        		res.Value = foundValue
+        		res.Nodes = nil
+        		res.Err = nil
+        	}else{
+        		
+        	}
+        default:
+            //do nothing
+    }
+
 	return nil
 }
 
