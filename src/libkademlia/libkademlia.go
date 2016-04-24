@@ -39,8 +39,12 @@ type KademliaChannels struct {
 	updateContactChannel      chan Contact
 
 	storeReqChannel						chan StoreRequest		// teststore channel
-	findValueIncomingChannel	chan ID
+
+	findValueIncomingChannel	chan ID 						//testfindvalue channels
 	findValueOutgoingChannel	chan []byte
+
+	findNodeIncomingChannel		chan ID 						//testfindnode channels
+	findNodeOutgoingChannel     chan []Contact
 }
 
 // var findContactIncomingChan = make(chan ID)
@@ -51,8 +55,8 @@ type KademliaChannels struct {
 // var findValueIncomingChannel = make(chan FindValueRequest)
 // var findValueOutgoingChannel = make(chan []byte)
 
-var findNodeIncomingChannel = make(chan ID)
-var findNodeOutgoingChannel = make(chan []Contact)
+//var findNodeIncomingChannel = make(chan ID)
+//var findNodeOutgoingChannel = make(chan []Contact)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
@@ -62,9 +66,12 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 		findContactOutgoingChan: 	make(chan *Contact),
 		updateContactChannel:    	make(chan Contact),
 
-		storeReqChannel:				 	make(chan StoreRequest),
+		storeReqChannel:			make(chan StoreRequest),
 		findValueIncomingChannel:	make(chan ID),
 		findValueOutgoingChannel:	make(chan []byte),
+
+		findNodeIncomingChannel:	make(chan ID),
+		findNodeOutgoingChannel:	make(chan []Contact),
 	}
 
 	k.NodeID = nodeID
@@ -144,25 +151,25 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 }
 
 
-func KBucketManager(k *Kademlia) {
+func KBucketManager(kadem *Kademlia) {
 	for {
 		select {
 
 		/*
 		 * Find a contact among our kBuckets
 		 */
-		case requestedContactID := <-k.Channels.findContactIncomingChan:
+		case requestedContactID := <-kadem.Channels.findContactIncomingChan:
 
 			fmt.Println("looking for", requestedContactID.AsString())
 
-			distance := k.SelfContact.NodeID.Xor(requestedContactID)
+			distance := kadem.SelfContact.NodeID.Xor(requestedContactID)
 			bucketIdx := distance.PrefixLen()
 			bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-			fmt.Println(k.SelfContact.NodeID.AsString(), "looking for", requestedContactID.AsString(), "where distance is", distance, "looking in bucket", bucketIdx)
+			fmt.Println(kadem.SelfContact.NodeID.AsString(), "looking for", requestedContactID.AsString(), "where distance is", distance, "looking in bucket", bucketIdx)
 
 			if bucketIdx >= 0 {
-				bucket := k.Table.Buckets[bucketIdx]
+				bucket := kadem.Table.Buckets[bucketIdx]
 
 				fmt.Println("Bucket length is", bucket.Len())
 
@@ -174,7 +181,7 @@ func KBucketManager(k *Kademlia) {
 					fmt.Println(elementID.AsString())
 					if elementID.Equals(requestedContactID){
 						contactFound =true
-						k.Channels.findContactOutgoingChan <- e.Value.(*Contact)
+						kadem.Channels.findContactOutgoingChan <- e.Value.(*Contact)
 						break
 						//TODO: might need to pass this to a go routine later
 						//bucket.MoveToBack(e)
@@ -183,14 +190,48 @@ func KBucketManager(k *Kademlia) {
 
 				if(!contactFound) {
 					fmt.Println("couldn't find contact")
-					k.Channels.findContactOutgoingChan <- nil
+					kadem.Channels.findContactOutgoingChan <- nil
 				}
 			}
 
-		case contactToBeUpdated := <-k.Channels.updateContactChannel:
-			fmt.Println("KBucketManager is telling", k.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
-			k.Update(&contactToBeUpdated)
+		case contactToBeUpdated := <-kadem.Channels.updateContactChannel:
+			fmt.Println("KBucketManager is telling", kadem.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
+			kadem.Update(&contactToBeUpdated)
 
+		case requestedNodesSearchKey := <-kadem.Channels.findNodeIncomingChannel:
+			distance := kadem.SelfContact.NodeID.Xor(requestedNodesSearchKey)
+			bucketIdx := distance.PrefixLen()
+			bucketIdx = (b - 1) - bucketIdx
+			//bucket := kadem.Table.Buckets[bucketIdx]
+			fmt.Println("starting index:", bucketIdx)
+			contactArray :=make([]Contact,0,k)
+
+			//go up
+			for i := bucketIdx; i < b; i++{
+				bucket := kadem.Table.Buckets[i]
+				for e := bucket.Front(); e != nil; e = e.Next() {
+					fmt.Println(kadem.SelfContact.NodeID.AsString(), "got",bucket.Len(), "contacts in bucket ", i, "contact is: ", (e.Value.(*Contact)).NodeID.AsString())
+					if(len(contactArray)>=k){
+						break;
+					}
+					contactArray= append(contactArray, *(e.Value.(*Contact)))
+				}
+			}
+			
+			//go down
+			if(len(contactArray)<k){
+				for j := bucketIdx; j >=0 ; j--{
+					bucket := kadem.Table.Buckets[j]
+					for e := bucket.Front(); e != nil; e = e.Next() {
+						if(len(contactArray)>=k){
+							break;
+						}
+						contactArray= append(contactArray, *(e.Value.(*Contact)))
+					}
+				}
+			}
+
+			kadem.Channels.findNodeOutgoingChannel <- contactArray
 		default:
 			//do nothing
 
@@ -204,24 +245,22 @@ func DataStoreManager(kadem *Kademlia) {
 
 	for{
 		select{
-
 		case storeReq := <-kadem.Channels.storeReqChannel:
 			kadem.DataStore[storeReq.Key] = storeReq.Value
 			// fmt.Println("stored stuff", string(kadem.DataStore[storeReq.Key]))
-
 		case key := <-kadem.Channels.findValueIncomingChannel:
 
 			if value, found := kadem.DataStore[key]; found {
 				kadem.Channels.findValueOutgoingChannel <- value
-				} else {
-					findNodeIncomingChannel <- key
-				}
-			default:
-				//do nothing
+			} else {
+				kadem.Channels.findValueOutgoingChannel <- nil
 			}
+		default:
+			//do nothing
 		}
-
 	}
+
+}
 
 func (kadem *Kademlia) Update(contact *Contact) error {
 
@@ -235,7 +274,7 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-	fmt.Println(kadem.SelfContact.NodeID.AsString(), "inserting", contact.NodeID.AsString(), "into bucket", bucketIdx)
+	fmt.Println(kadem.SelfContact.NodeID.AsString(), "inserting", contact.NodeID.AsString(), "into bucket", bucketIdx, "that has length", kadem.Table.Buckets[bucketIdx].Len() )
 
 	if bucketIdx >= 0 {
 		bucket := kadem.Table.Buckets[bucketIdx]
@@ -359,7 +398,34 @@ func (k *Kademlia) DoStore(contact *Contact, key ID, value []byte) error {
 
 func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error) {
 	// TODO: Implement
-	return nil, &CommandFailed{"Not implemented"}
+	fmt.Printf("Inside Do Find Node")
+
+	hostname:=contact.Host.String()
+	portString := strconv.Itoa(int(contact.Port))
+	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	FindNodeReq := new(FindNodeRequest)
+	FindNodeReq.MsgID = NewRandomID()
+	FindNodeReq.Sender = k.SelfContact
+	FindNodeReq.NodeID = searchKey
+
+	var FindNodeRes FindNodeResult
+	err = client.Call("KademliaRPC.FindNode", FindNodeReq, &FindNodeRes)
+	if err != nil {
+		log.Fatal("Call: ", err)
+	}
+
+	for i:=0; i<len(FindNodeRes.Nodes);i++{
+		k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
+	}
+
+	return FindNodeRes.Nodes, FindNodeRes.Err
+
 }
 
 func (k *Kademlia) DoFindValue(contact *Contact,

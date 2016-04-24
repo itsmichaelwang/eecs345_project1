@@ -177,6 +177,9 @@ func TestFindValue(t *testing.T) {
 	*/
 	instance1 := NewKademlia("localhost:7926")
 	instance2 := NewKademlia("localhost:7927")
+	fmt.Println("TestFindValue instance1 ID:" , instance1.SelfContact.NodeID.AsString())
+	fmt.Println("TestFindValue instance2 ID:" , instance2.SelfContact.NodeID.AsString())
+	fmt.Println()
 	host2, port2, _ := StringToIpPort("localhost:7927")
 	instance1.DoPing(host2, port2)
 	contact2, err := instance1.FindContact(instance2.NodeID)
@@ -210,7 +213,7 @@ func TestFindValue(t *testing.T) {
 	wrongKey := NewRandomID()
 	foundValue, contacts, err = instance1.DoFindValue(contact2, wrongKey)
 	if contacts == nil || len(contacts) < 10 {
-		t.Error("Searching for a wrong ID did not return contacts")
+		t.Error("Searching for a wrong ID did not return contacts" + strconv.Itoa(len(contacts)))
 	}
 
 	// TODO: Check that the correct contacts were stored

@@ -95,7 +95,18 @@ type FindNodeResult struct {
 
 func (k *KademliaRPC) FindNode(req FindNodeRequest, res *FindNodeResult) error {
 	// TODO: Implement.
-	findNodeIncomingChannel <- req.NodeID
+	k.kademlia.Channels.findNodeIncomingChannel <- req.NodeID
+	foundNodes := <-k.kademlia.Channels.findNodeOutgoingChannel
+	if foundNodes != nil{
+		res.MsgID = CopyID(req.MsgID)
+		res.Nodes = foundNodes
+		res.Err = nil
+	}else{
+		res.MsgID = CopyID(req.MsgID)
+		res.Nodes = nil
+		res.Err = &CommandFailed{"Could not find nodes"}
+	}
+
 	return nil
 }
 
@@ -122,19 +133,28 @@ func (k *KademliaRPC) FindValue(req FindValueRequest, res *FindValueResult) erro
 	fmt.Println("RPC FindValue got called from Sender", req.Sender.NodeID.AsString())
 	k.kademlia.Channels.findValueIncomingChannel <- req.Key
 
-	select{
-        case foundValue := <-k.kademlia.Channels.findValueOutgoingChannel:
-        	if foundValue != nil{
-        		res.MsgID = CopyID(req.MsgID)
-        		res.Value = foundValue
-        		res.Nodes = nil
-        		res.Err = nil
-        	}else{
+	foundValue := <-k.kademlia.Channels.findValueOutgoingChannel
+	if foundValue != nil{
+		res.MsgID = CopyID(req.MsgID)
+		res.Value = foundValue
+		res.Nodes = nil
+		res.Err = nil
+	}else{
+		k.kademlia.Channels.findNodeIncomingChannel <- req.Key
+		foundNodes := <-k.kademlia.Channels.findNodeOutgoingChannel
+		if foundNodes != nil{
+			res.MsgID = CopyID(req.MsgID)
+			res.Value = nil
+			res.Nodes = foundNodes
+			res.Err = nil
+		}else{
+			res.MsgID = CopyID(req.MsgID)
+			res.Value = nil
+			res.Nodes = nil
+			res.Err = &CommandFailed{"Could not find nodes"}
+		}
+	}
 
-        	}
-        default:
-            //do nothing
-    }
 
 	return nil
 }
