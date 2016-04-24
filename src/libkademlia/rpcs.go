@@ -33,19 +33,27 @@ type PongMessage struct {
 	Sender Contact
 }
 
+/*
+ * WHEN I GET A PING
+ */
 func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
-	fmt.Println("RPC Ping got called")
+	fmt.Println(k.kademlia.SelfContact.NodeID.AsString(), "received a ping from", ping.Sender.NodeID.AsString())
+
+
 	pong.MsgID = CopyID(ping.MsgID)
 	// Specify the sender
 	pong.Sender = k.kademlia.SelfContact
 	// Update contact, etc
 	// TODO: CopyID or reference directly?
-	updateContactChannel <-&(ping.Sender)
-	
-	
+
+
+	fmt.Println("I am", k.kademlia.SelfContact.NodeID.AsString(), "and I am about to send to updateContactChannel", ping.Sender.NodeID.AsString())
+	updateContactChannel<-ping.Sender
+
+
 	return nil
-	
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -122,7 +130,7 @@ func (k *KademliaRPC) FindValue(req FindValueRequest, res *FindValueResult) erro
         		res.Nodes = nil
         		res.Err = nil
         	}else{
-        		
+
         	}
         default:
             //do nothing

@@ -32,41 +32,68 @@ func StringToIpPort(laddr string) (ip net.IP, port uint16, err error) {
 func TestPing(t *testing.T) {
 	instance1 := NewKademlia("localhost:7890")
 	instance2 := NewKademlia("localhost:7891")
-	fmt.Println("Instance1:" , instance1.SelfContact.NodeID.AsString())
-	fmt.Println("Instance2:" , instance2.SelfContact.NodeID.AsString())
+
+	fmt.Println("TestPing instance1 ID:" , instance1.SelfContact.NodeID.AsString())
+	fmt.Println("TestPing instance2 ID:" , instance2.SelfContact.NodeID.AsString())
+	fmt.Println()
+
+	// fmt.Println("Running test #1")
+	// fmt.Println()
+
 	host2, port2, _ := StringToIpPort("localhost:7891")
 	contact2, err := instance2.FindContact(instance2.NodeID)
 	if err != nil {
 		t.Error("A node cannot find itself's contact info")
 	}
+
+	// fmt.Println("Running test #2")
+	// fmt.Println()
+
 	contact2, err = instance2.FindContact(instance1.NodeID)
 	if err == nil {
 		t.Error("Instance 2 should not be able to find instance " +
 			"1 in its buckets before ping instance 1")
 	}
+
+	fmt.Println("Running test #3")
+	fmt.Println()
+
+	fmt.Println(instance1.SelfContact.NodeID.AsString(), "DoPing", instance2.SelfContact.NodeID.AsString())
 	instance1.DoPing(host2, port2)
+
+	fmt.Println(instance1.SelfContact.NodeID.AsString(), "FindContact", instance2.SelfContact.NodeID.AsString())
 	contact2, err = instance1.FindContact(instance2.NodeID)
 	if err != nil {
 		t.Error("Instance 2's contact not found in Instance 1's contact list")
 		return
 	}
+
+	fmt.Println("Running test #4")
+	fmt.Println()
+
 	wrong_ID := NewRandomID()
 	_, err = instance2.FindContact(wrong_ID)
 	if err == nil {
 		t.Error("Instance 2 should not be able to find a node with the wrong ID")
 	}
 
+	fmt.Println("Running test #5")
+	fmt.Println()
+
 	contact1, err := instance2.FindContact(instance1.NodeID)
 	if err != nil {
 		t.Error("Instance 1's contact not found in Instance 2's contact list")
 		return
 	}
+
 	if contact1.NodeID != instance1.NodeID {
 		t.Error("Instance 1 ID incorrectly stored in Instance 2's contact list")
 	}
+
 	if contact2.NodeID != instance2.NodeID {
 		t.Error("Instance 2 ID incorrectly stored in Instance 1's contact list")
 	}
+
 	return
 }
 
