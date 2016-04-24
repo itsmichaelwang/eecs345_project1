@@ -34,18 +34,23 @@ type RoutingTable struct {
 }
 
 type KademliaChannels struct {
-	findContactIncomingChan    chan ID
-	findContactOutgoingChan    chan *Contact
-	updateContactChannel       chan Contact
+	findContactIncomingChan 	chan ID							// testping channels
+	findContactOutgoingChan   chan *Contact
+	updateContactChannel      chan Contact
+
+	storeReqChannel						chan StoreRequest		// teststore channel
+	findValueIncomingChannel	chan ID
+	findValueOutgoingChannel	chan []byte
 }
 
 // var findContactIncomingChan = make(chan ID)
 // var findContactOutgoingChan = make(chan *Contact)
 // var updateContactChannel = make(chan Contact)
 
-var storeReqChannel = make(chan StoreRequest)
-var findValueIncomingChannel = make(chan FindValueRequest)
-var findValueOutgoingChannel = make(chan []byte)
+// var storeReqChannel = make(chan StoreRequest)
+// var findValueIncomingChannel = make(chan FindValueRequest)
+// var findValueOutgoingChannel = make(chan []byte)
+
 var findNodeIncomingChannel = make(chan ID)
 var findNodeOutgoingChannel = make(chan []Contact)
 
@@ -53,9 +58,13 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
 
 	k.Channels = KademliaChannels{
-		findContactIncomingChan: make(chan ID),
-		findContactOutgoingChan: make(chan *Contact),
-		updateContactChannel:    make(chan Contact),
+		findContactIncomingChan: 	make(chan ID),
+		findContactOutgoingChan: 	make(chan *Contact),
+		updateContactChannel:    	make(chan Contact),
+
+		storeReqChannel:				 	make(chan StoreRequest),
+		findValueIncomingChannel:	make(chan ID),
+		findValueOutgoingChannel:	make(chan []byte),
 	}
 
 	k.NodeID = nodeID
@@ -65,7 +74,7 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	}
 
 	go KBucketManager(k)
-	go DataStoreManager(k.DataStore)
+	go DataStoreManager(k)
 
 	// Set up RPC server
 	// NOTE: KademliaRPC is just a wrapper around Kademlia. This type includes
@@ -190,24 +199,29 @@ func KBucketManager(k *Kademlia) {
 }
 
 
-func DataStoreManager(dataStore map[ID][]byte) {
-	dataStore = make(map[ID][]byte)
+func DataStoreManager(kadem *Kademlia) {
+	kadem.DataStore = make(map[ID][]byte)
+
 	for{
-        select{
-        case storeReq := <-storeReqChannel:
-        	dataStore[storeReq.Key] = storeReq.Value
-        	fmt.Println("stored stuff", string(dataStore[storeReq.Key]))
-        case findValueReq := <- findValueIncomingChannel:
-        	if value, found := dataStore[findValueReq.Key]; found {
-			    findValueOutgoingChannel <- value
-			}else{
-				findNodeIncomingChannel <- findValueReq.Key
+		select{
+
+		case storeReq := <-kadem.Channels.storeReqChannel:
+			kadem.DataStore[storeReq.Key] = storeReq.Value
+			// fmt.Println("stored stuff", string(kadem.DataStore[storeReq.Key]))
+
+		case key := <-kadem.Channels.findValueIncomingChannel:
+
+			if value, found := kadem.DataStore[key]; found {
+				kadem.Channels.findValueOutgoingChannel <- value
+				} else {
+					findNodeIncomingChannel <- key
+				}
+			default:
+				//do nothing
 			}
-        default:
-            //do nothing
-        }
-    }
-}
+		}
+
+	}
 
 func (kadem *Kademlia) Update(contact *Contact) error {
 
@@ -378,7 +392,10 @@ func (k *Kademlia) DoFindValue(contact *Contact,
 
 func (k *Kademlia) LocalFindValue(searchKey ID) ([]byte, error) {
 	// TODO: Implement
-	return []byte(""), &CommandFailed{"Not implemented"}
+	k.Channels.findValueIncomingChannel<-searchKey
+	value := <-k.Channels.findValueOutgoingChannel
+
+	return value, nil
 }
 
 // For project 2!

@@ -74,7 +74,7 @@ type StoreResult struct {
 func (k *KademliaRPC) Store(req StoreRequest, res *StoreResult) error {
 	// TODO: Implement.
 	fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
-	storeReqChannel <- req
+	k.kademlia.Channels.storeReqChannel <- req
 	return nil
 }
 
@@ -120,10 +120,10 @@ type FindValueResult struct {
 func (k *KademliaRPC) FindValue(req FindValueRequest, res *FindValueResult) error {
 	// TODO: Implement.
 	fmt.Println("RPC FindValue got called from Sender", req.Sender.NodeID.AsString())
-	findValueIncomingChannel <- req
+	k.kademlia.Channels.findValueIncomingChannel <- req.Key
 
 	select{
-        case foundValue := <-findValueOutgoingChannel:
+        case foundValue := <-k.kademlia.Channels.findValueOutgoingChannel:
         	if foundValue != nil{
         		res.MsgID = CopyID(req.MsgID)
         		res.Value = foundValue
