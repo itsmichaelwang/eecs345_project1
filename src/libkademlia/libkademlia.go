@@ -26,16 +26,22 @@ type Kademlia struct {
 	SelfContact 	Contact
 	Table			RoutingTable
 	DataStore 		map[ID][]byte
+	Channels        KademliaChannels
 }
 
 type RoutingTable struct {
 	Buckets 			[b]*list.List //160 lists
 }
 
-var findContactIncomingChan = make(chan ID)
-var findContactOutgoingChan = make(chan *Contact)
+type KademliaChannels struct {
+	findContactIncomingChan    chan ID
+	findContactOutgoingChan    chan *Contact
+	updateContactChannel       chan Contact
+}
 
-var updateContactChannel = make(chan Contact)
+// var findContactIncomingChan = make(chan ID)
+// var findContactOutgoingChan = make(chan *Contact)
+// var updateContactChannel = make(chan Contact)
 
 var storeReqChannel = make(chan StoreRequest)
 var findValueIncomingChannel = make(chan FindValueRequest)
@@ -45,6 +51,13 @@ var findNodeOutgoingChannel = make(chan []Contact)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
+
+	k.Channels = KademliaChannels{
+		findContactIncomingChan: make(chan ID),
+		findContactOutgoingChan: make(chan *Contact),
+		updateContactChannel:    make(chan Contact),
+	}
+
 	k.NodeID = nodeID
 	// TODO: Initialize other state here as you add functionality.
 	for index, _ := range k.Table.Buckets {
@@ -109,9 +122,9 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	if nodeId == k.SelfContact.NodeID {
 		return &k.SelfContact, nil
 	}
-	findContactIncomingChan <- nodeId
+	k.Channels.findContactIncomingChan <- nodeId
 
-	foundContact := <-findContactOutgoingChan
+	foundContact := <- k.Channels.findContactOutgoingChan
 
 	if foundContact != nil{
 		return foundContact, nil
@@ -129,7 +142,7 @@ func KBucketManager(k *Kademlia) {
 		/*
 		 * Find a contact among our kBuckets
 		 */
-		case requestedContactID := <-findContactIncomingChan:
+		case requestedContactID := <-k.Channels.findContactIncomingChan:
 
 			fmt.Println("looking for", requestedContactID.AsString())
 
@@ -152,7 +165,7 @@ func KBucketManager(k *Kademlia) {
 					fmt.Println(elementID.AsString())
 					if elementID.Equals(requestedContactID){
 						contactFound =true
-						findContactOutgoingChan <- e.Value.(*Contact)
+						k.Channels.findContactOutgoingChan <- e.Value.(*Contact)
 						break
 						//TODO: might need to pass this to a go routine later
 						//bucket.MoveToBack(e)
@@ -161,11 +174,11 @@ func KBucketManager(k *Kademlia) {
 
 				if(!contactFound) {
 					fmt.Println("couldn't find contact")
-					findContactOutgoingChan <- nil
+					k.Channels.findContactOutgoingChan <- nil
 				}
 			}
 
-		case contactToBeUpdated := <-updateContactChannel:
+		case contactToBeUpdated := <-k.Channels.updateContactChannel:
 			fmt.Println("KBucketManager is telling", k.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
 			k.Update(&contactToBeUpdated)
 
@@ -291,7 +304,7 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 		log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
 		fmt.Println("received pong from:", pong.Sender.NodeID.AsString())
 
-		updateContactChannel <- pong.Sender
+		k.Channels.updateContactChannel <- pong.Sender
 		return &(pong.Sender), nil
 
 	case <-time.After(5 * time.Second):

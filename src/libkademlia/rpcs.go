@@ -49,7 +49,7 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 
 
 	fmt.Println("I am", k.kademlia.SelfContact.NodeID.AsString(), "and I am about to send to updateContactChannel", ping.Sender.NodeID.AsString())
-	updateContactChannel<-ping.Sender
+	k.kademlia.Channels.updateContactChannel<-ping.Sender
 
 
 	return nil
