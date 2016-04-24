@@ -34,7 +34,9 @@ type RoutingTable struct {
 
 var findContactIncomingChan = make(chan ID)
 var findContactOutgoingChan = make(chan *Contact)
-var updateContactChannel = make(chan *Contact)
+
+var updateContactChannel = make(chan Contact)
+
 var storeReqChannel = make(chan StoreRequest)
 var findValueIncomingChannel = make(chan FindValueRequest)
 var findValueOutgoingChannel = make(chan []byte)
@@ -110,50 +112,68 @@ func (k *Kademlia) FindContact(nodeId ID) (*Contact, error) {
 	findContactIncomingChan <- nodeId
 
 	foundContact := <-findContactOutgoingChan
+
 	if foundContact != nil{
 		return foundContact, nil
 	}else{
-		return nil, &ContactNotFoundError{nodeId, "Not found"} 
+		return nil, &ContactNotFoundError{nodeId, "Not found"}
 	}
-	
+
 }
 
 
 func KBucketManager(k *Kademlia) {
-    for{
-        select{
-        case requestedContactID := <-findContactIncomingChan:
-        	distance := k.SelfContact.NodeID.Xor(requestedContactID)
+	for {
+		select {
+
+		/*
+		 * Find a contact among our kBuckets
+		 */
+		case requestedContactID := <-findContactIncomingChan:
+
+			fmt.Println("looking for", requestedContactID.AsString())
+
+			distance := k.SelfContact.NodeID.Xor(requestedContactID)
 			bucketIdx := distance.PrefixLen()
 			bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-			fmt.Println("Finding contact:", requestedContactID.AsString(), "In bucket: ", bucketIdx)
+			fmt.Println(k.SelfContact.NodeID.AsString(), "looking for", requestedContactID.AsString(), "where distance is", distance, "looking in bucket", bucketIdx)
 
 			if bucketIdx >= 0 {
 				bucket := k.Table.Buckets[bucketIdx]
+
+				fmt.Println("Bucket length is", bucket.Len())
+
 				contactFound := false
 				for e := bucket.Front(); e != nil; e = e.Next() {
+					fmt.Println("Looking...")
+
 					elementID := (e.Value.(*Contact)).NodeID
 					fmt.Println(elementID.AsString())
 					if elementID.Equals(requestedContactID){
 						contactFound =true
 						findContactOutgoingChan <- e.Value.(*Contact)
 						break
-						//TODO: might need to pass this to a go routine later 
+						//TODO: might need to pass this to a go routine later
 						//bucket.MoveToBack(e)
 					}
 				}
-				if(!contactFound){
+
+				if(!contactFound) {
 					fmt.Println("couldn't find contact")
 					findContactOutgoingChan <- nil
 				}
 			}
-        case contactToBeUpdated := <-updateContactChannel:
-        	k.Update(contactToBeUpdated)
-        default:
-            //do nothing
-        }
-    }
+
+		case contactToBeUpdated := <-updateContactChannel:
+			fmt.Println("KBucketManager is telling", k.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
+			k.Update(&contactToBeUpdated)
+
+		default:
+			//do nothing
+
+		}
+	}
 }
 
 
@@ -177,13 +197,18 @@ func DataStoreManager(dataStore map[ID][]byte) {
 }
 
 func (kadem *Kademlia) Update(contact *Contact) error {
-	
+
+
+
 	// TODO: Implement
 	distance := kadem.SelfContact.NodeID.Xor(contact.NodeID)
+
+	// fmt.Println("Distance is")
+
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-	fmt.Println("Updating with contact:", contact.NodeID.AsString(), "In bucket: ", bucketIdx)
+	fmt.Println(kadem.SelfContact.NodeID.AsString(), "inserting", contact.NodeID.AsString(), "into bucket", bucketIdx)
 
 	if bucketIdx >= 0 {
 		bucket := kadem.Table.Buckets[bucketIdx]
@@ -193,7 +218,7 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 			fmt.Println(elementID.AsString())
 			if elementID.Equals(contact.NodeID){
 				contactExists = true
-				//TODO: might need to pass this to a go routine later 
+				//TODO: might need to pass this to a go routine later
 				bucket.MoveToBack(e)
 				break
 			}
@@ -203,11 +228,14 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 
 		//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
 			bucket.PushBack(contact)
-			fmt.Println("Inside Update")
-			for e := bucket.Front(); e != nil; e = e.Next() {
-				elementID := (e.Value.(*Contact)).NodeID
-				fmt.Println(elementID.AsString())
-			}
+
+			fmt.Println(kadem.SelfContact.NodeID.AsString(), "has inserted", contact.NodeID.AsString())
+
+			// for e := bucket.Front(); e != nil; e = e.Next() {
+			// 	elementID := (e.Value.(*Contact)).NodeID
+			// 	fmt.Println(elementID.AsString())
+			// }
+
 		} else if !contactExists && bucket.Len() >= k {
 			//If the contact does not exist and the k-bucket is full: ping the least recently contacted node (at the head of the k-bucket), if that contact fails to respond, drop it and append new contact to tail, otherwise ignore the new contact and update least recently seen contact.
 			frontNode := bucket.Front().Value.(*Contact)
@@ -235,8 +263,9 @@ func (e *CommandFailed) Error() string {
 
 func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 	// TODO: Implement
-	//hostnames,_:=net.LookupAddr(host.String())
-	//hostname := hostnames[0]
+	// hostnames,_:=net.LookupAddr(host.String())
+	// hostname := hostnames[0]
+
 	hostname:=host.String()
 	portString := strconv.Itoa(int(port))
 	log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
@@ -246,25 +275,28 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 		log.Fatal("DialHTTP: ", err)
 	}
 
-	log.Printf("Pinging initial peer from DoPing\n")
-
 	ping := new(PingMessage)
 	ping.MsgID = NewRandomID()
 	ping.Sender = k.SelfContact
-	
+
 	var pong PongMessage
+
 	callRes := client.Go("KademliaRPC.Ping", ping, &pong, nil)
+
 	select {
-	  case <-callRes.Done:
-	    // do what you need with test.CallReply
-	    log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
+
+	case <-callRes.Done:
+		// do what you need with test.CallReply
+		log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
 		log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
-		fmt.Println("received pong from: ", pong.Sender.NodeID.AsString())
-		updateContactChannel <- &(pong.Sender)
-	    return &(pong.Sender), nil
-	  case <-time.After(5 * time.Second):
-	    // handle call failing
-	    return nil, &CommandFailed{"Timeout"}
+		fmt.Println("received pong from:", pong.Sender.NodeID.AsString())
+
+		updateContactChannel <- pong.Sender
+		return &(pong.Sender), nil
+
+	case <-time.After(5 * time.Second):
+		// handle call failing
+		return nil, &CommandFailed{"Timeout"}
 	}
 
 	//return nil, &CommandFailed{"Unable to ping " + fmt.Sprintf("%s:%v", host.String(), port)}
@@ -288,7 +320,7 @@ func (k *Kademlia) DoStore(contact *Contact, key ID, value []byte) error {
 	StoreReq.Sender = k.SelfContact
 	StoreReq.Key = key
 	StoreReq.Value = value
-	
+
 	var StoreRes StoreResult
 	err = client.Call("KademliaRPC.Store", StoreReq, &StoreRes)
 	if err != nil {
@@ -321,7 +353,7 @@ func (k *Kademlia) DoFindValue(contact *Contact,
 	FindValReq.MsgID = NewRandomID()
 	FindValReq.Sender = k.SelfContact
 	FindValReq.Key = searchKey
-	
+
 	var FindValRes FindValueResult
 	err = client.Call("KademliaRPC.FindValue", FindValReq, &FindValRes)
 	if err != nil {
