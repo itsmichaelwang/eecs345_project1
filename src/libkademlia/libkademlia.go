@@ -24,9 +24,9 @@ const (
 type Kademlia struct {
 	NodeID      	ID
 	SelfContact 	Contact
-	Table			RoutingTable
+	Table					RoutingTable
 	DataStore 		map[ID][]byte
-	Channels        KademliaChannels
+	Channels      KademliaChannels
 }
 
 type RoutingTable struct {
@@ -40,23 +40,14 @@ type KademliaChannels struct {
 
 	storeReqChannel						chan StoreRequest		// teststore channel
 
-	findValueIncomingChannel	chan ID 						//testfindvalue channels
+	findValueIncomingChannel	chan ID 						// testfindvalue channels
 	findValueOutgoingChannel	chan []byte
 
-	findNodeIncomingChannel		chan ID 						//testfindnode channels
-	findNodeOutgoingChannel     chan []Contact
+	findNodeIncomingChannel		chan ID 						// testfindnode channels
+	findNodeOutgoingChannel   chan []Contact
 }
 
-// var findContactIncomingChan = make(chan ID)
-// var findContactOutgoingChan = make(chan *Contact)
-// var updateContactChannel = make(chan Contact)
 
-// var storeReqChannel = make(chan StoreRequest)
-// var findValueIncomingChannel = make(chan FindValueRequest)
-// var findValueOutgoingChannel = make(chan []byte)
-
-//var findNodeIncomingChannel = make(chan ID)
-//var findNodeOutgoingChannel = make(chan []Contact)
 
 func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 	k := new(Kademlia)
@@ -217,7 +208,7 @@ func KBucketManager(kadem *Kademlia) {
 					contactArray= append(contactArray, *(e.Value.(*Contact)))
 				}
 			}
-			
+
 			//go down
 			if(len(contactArray)<k){
 				for j := bucketIdx; j >=0 ; j--{
@@ -397,12 +388,9 @@ func (k *Kademlia) DoStore(contact *Contact, key ID, value []byte) error {
 }
 
 func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error) {
-	// TODO: Implement
-	fmt.Printf("Inside Do Find Node")
-
-	hostname:=contact.Host.String()
+	hostname := contact.Host.String()
 	portString := strconv.Itoa(int(contact.Port))
-	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+
 	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
 		rpc.DefaultRPCPath+portString)
 	if err != nil {
@@ -415,17 +403,21 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 	FindNodeReq.NodeID = searchKey
 
 	var FindNodeRes FindNodeResult
-	err = client.Call("KademliaRPC.FindNode", FindNodeReq, &FindNodeRes)
-	if err != nil {
-		log.Fatal("Call: ", err)
+	callRes := client.Go("KademliaRPC.FindNode", FindNodeReq, &FindNodeRes, nil)
+
+	select {
+
+	case <-callRes.Done:
+		for i:=0; i<len(FindNodeRes.Nodes);i++{
+			k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
+		}
+
+		return FindNodeRes.Nodes, FindNodeRes.Err
+
+	case <-time.After(250 * time.Millisecond):
+		// handle call failing
+		return nil, &CommandFailed{"Timeout"}
 	}
-
-	for i:=0; i<len(FindNodeRes.Nodes);i++{
-		k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
-	}
-
-	return FindNodeRes.Nodes, FindNodeRes.Err
-
 }
 
 func (k *Kademlia) DoFindValue(contact *Contact,
@@ -466,6 +458,27 @@ func (k *Kademlia) LocalFindValue(searchKey ID) ([]byte, error) {
 
 // For project 2!
 func (k *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
+	shortList := list.New()
+
+	// alphaChannels := [alpha] chan
+
+	k.Channels.findNodeIncomingChannel <- id
+	foundNodes := <- k.Channels.findNodeOutgoingChannel
+
+	for index, element := range foundNodes {
+		if (index >= alpha) {
+			break
+		}
+		shortList.PushBack(element)
+	}
+
+	// for i := 0; i < alpha; i++ {
+	// 	go DoFindNode(shortList, id)
+	// }
+
+
+	fmt.Println(shortList)
+
 	return nil, &CommandFailed{"Not implemented"}
 }
 func (k *Kademlia) DoIterativeStore(key ID, value []byte) ([]Contact, error) {
