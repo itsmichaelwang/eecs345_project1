@@ -414,7 +414,7 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 
 		return FindNodeRes.Nodes, FindNodeRes.Err
 
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(2500 * time.Millisecond):
 		// handle call failing
 		return nil, &CommandFailed{"Timeout"}
 	}
