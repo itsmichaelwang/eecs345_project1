@@ -467,18 +467,23 @@ func (k *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 		}
 		shortList.PushBack(element)
 	}
-  numCalls := 0
-	// Iterate over the shortlist and
-	for _, element := range shortList {
-		numCalls++
-		foundNodeChan <- (go DoFindNode(element, id))
-		break if numcalls >= alpha
-	}
 
-	for numCalls > 0; numCalls--{
-		select{
-			whatever:
-		default:
+	for (while cycle is improving and target not found) {
+	  numCalls := 0
+		// Iterate over the shortlist and
+		for _, element := range shortList {
+			numCalls++
+			go DoFindNode(element, id)
+			break if numCalls >= alpha
+		}
+
+		for numCalls > 0; numCalls--{
+			select{
+			foundNounds = <- foundNodeChan
+			//modify list and remove from shortlist if nil
+			//update shortest node
+			default:
+			}
 		}
 	}
 	return nil, &CommandFailed{"Not implemented"}
