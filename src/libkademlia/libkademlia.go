@@ -37,14 +37,12 @@ type KademliaChannels struct {
 	findContactIncomingChan 	chan ID							// testping channels
 	findContactOutgoingChan   chan *Contact
 	updateContactChannel      chan Contact
-
 	storeReqChannel						chan StoreRequest		// teststore channel
-
 	findValueIncomingChannel	chan ID 						// testfindvalue channels
 	findValueOutgoingChannel	chan []byte
-
 	findNodeIncomingChannel		chan ID 						// testfindnode channels
 	findNodeOutgoingChannel   chan []Contact
+	iterateOverNodesChannel		chan []Contact			// this is for part 2
 }
 
 
@@ -56,13 +54,12 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 		findContactIncomingChan: 	make(chan ID),
 		findContactOutgoingChan: 	make(chan *Contact),
 		updateContactChannel:    	make(chan Contact),
-
 		storeReqChannel:			make(chan StoreRequest),
 		findValueIncomingChannel:	make(chan ID),
 		findValueOutgoingChannel:	make(chan []byte),
-
 		findNodeIncomingChannel:	make(chan ID),
 		findNodeOutgoingChannel:	make(chan []Contact),
+		iterateOverNodesChannel: make(chan []Contact),
 	}
 
 	k.NodeID = nodeID
@@ -254,9 +251,6 @@ func DataStoreManager(kadem *Kademlia) {
 }
 
 func (kadem *Kademlia) Update(contact *Contact) error {
-
-
-
 	// TODO: Implement
 	distance := kadem.SelfContact.NodeID.Xor(contact.NodeID)
 
@@ -412,6 +406,7 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 			k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
 		}
 
+
 		return FindNodeRes.Nodes, FindNodeRes.Err
 
 	case <-time.After(2500 * time.Millisecond):
@@ -458,10 +453,11 @@ func (k *Kademlia) LocalFindValue(searchKey ID) ([]byte, error) {
 
 // For project 2!
 func (k *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
+	// Create a shortlist of at most k nodes, ordered by distance from the ID
 	shortList := list.New()
 
-	// alphaChannels := [alpha] chan
-
+	// First try to get at most alpha nodes from one's own k-buckets
+	// Put those in the shortlist
 	k.Channels.findNodeIncomingChannel <- id
 	foundNodes := <- k.Channels.findNodeOutgoingChannel
 
@@ -471,14 +467,20 @@ func (k *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 		}
 		shortList.PushBack(element)
 	}
+  numCalls := 0
+	// Iterate over the shortlist and
+	for _, element := range shortList {
+		numCalls++
+		foundNodeChan <- (go DoFindNode(element, id))
+		break if numcalls >= alpha
+	}
 
-	// for i := 0; i < alpha; i++ {
-	// 	go DoFindNode(shortList, id)
-	// }
-
-
-	fmt.Println(shortList)
-
+	for numCalls > 0; numCalls--{
+		select{
+			whatever:
+		default:
+		}
+	}
 	return nil, &CommandFailed{"Not implemented"}
 }
 func (k *Kademlia) DoIterativeStore(key ID, value []byte) ([]Contact, error) {
