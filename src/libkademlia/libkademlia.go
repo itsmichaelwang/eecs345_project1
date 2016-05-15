@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"container/list"
 	"time"
+	"sort"
 )
 
 const (
@@ -34,17 +35,19 @@ type RoutingTable struct {
 }
 
 type KademliaChannels struct {
-	findContactIncomingChan 	chan ID							// testping channels
+	findContactIncomingChan   chan ID						// testping channels
 	findContactOutgoingChan   chan *Contact
 	updateContactChannel      chan Contact
 
-	storeReqChannel						chan StoreRequest		// teststore channel
+	storeReqChannel           chan StoreRequest				// teststore channel
 
-	findValueIncomingChannel	chan ID 						// testfindvalue channels
-	findValueOutgoingChannel	chan []byte
+	findValueIncomingChannel  chan ID 						// testfindvalue channels
+	findValueOutgoingChannel  chan []byte
 
-	findNodeIncomingChannel		chan ID 						// testfindnode channels
+	findNodeIncomingChannel   chan ID 						// testfindnode channels
 	findNodeOutgoingChannel   chan []Contact
+
+	iterativeFindNodeChan     chan IterativeFindNodeResult	//Project 2
 }
 
 
@@ -63,6 +66,8 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 
 		findNodeIncomingChannel:	make(chan ID),
 		findNodeOutgoingChannel:	make(chan []Contact),
+
+		iterativeFindNodeChan:		make(chan IterativeFindNodeResult),
 	}
 
 	k.NodeID = nodeID
@@ -255,8 +260,6 @@ func DataStoreManager(kadem *Kademlia) {
 
 func (kadem *Kademlia) Update(contact *Contact) error {
 
-
-
 	// TODO: Implement
 	distance := kadem.SelfContact.NodeID.Xor(contact.NodeID)
 
@@ -412,10 +415,24 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 			k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
 		}
 
+		IterativeFindNodeRes := new(IterativeFindNodeResult)
+		IterativeFindNodeRes.MsgID = FindNodeRes.MsgID
+		IterativeFindNodeRes.Nodes = FindNodeRes.Nodes
+		IterativeFindNodeRes.Err = FindNodeRes.Err
+		IterativeFindNodeRes.OriginalRequester = k.SelfContact
+
+		k.Channels.iterativeFindNodeChan <- *IterativeFindNodeRes
+
 		return FindNodeRes.Nodes, FindNodeRes.Err
 
 	case <-time.After(2500 * time.Millisecond):
 		// handle call failing
+		IterativeFindNodeResFail := new(IterativeFindNodeResult)
+		IterativeFindNodeResFail.MsgID = FindNodeRes.MsgID
+		IterativeFindNodeResFail.Nodes = nil
+		IterativeFindNodeResFail.Err = FindNodeRes.Err
+		IterativeFindNodeResFail.OriginalRequester = k.SelfContact
+		k.Channels.iterativeFindNodeChan <- *IterativeFindNodeResFail
 		return nil, &CommandFailed{"Timeout"}
 	}
 }
@@ -457,30 +474,165 @@ func (k *Kademlia) LocalFindValue(searchKey ID) ([]byte, error) {
 }
 
 // For project 2!
-func (k *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
-	shortList := list.New()
 
-	// alphaChannels := [alpha] chan
+//extra fields added
+type IterativeFindNodeResult struct {
+	MsgID ID
+	Nodes []Contact
+	Err   error
+	OriginalRequester Contact
+}
 
-	k.Channels.findNodeIncomingChannel <- id
-	foundNodes := <- k.Channels.findNodeOutgoingChannel
+type ShortListContact struct {
+	NodeID ID
+	Host   net.IP
+	Port   uint16
+	Distance ID
+}
 
+//The interface required so we can sort a list of contacts
+type ShortListContacts []ShortListContact
+
+func (slice ShortListContacts) Len() int {
+    return len(slice)
+}
+
+func (slice ShortListContacts) Less(i, j int) bool {
+    return slice[i].Distance.Less(slice[j].Distance);
+}
+
+func (slice ShortListContacts) Swap(i, j int) {
+    slice[i], slice[j] = slice[j], slice[i]
+}
+
+func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
+	var activeNodes ShortListContacts
+	var nodesToVisit ShortListContacts
+	var visitedNodes map[ID]bool
+	var closestContact Contact
+
+	closestContactChanged := false
+	lastIteration := false
+
+	kadem.Channels.findNodeIncomingChannel <- id
+	foundNodes := <- kadem.Channels.findNodeOutgoingChannel
+	//initialize...
+	closestContact = foundNodes[0]
+
+	//Prepare the first iteration of alpha contacts
 	for index, element := range foundNodes {
-		if (index >= alpha) {
-			break
+		if (index >= alpha) { break }
+		
+		//create a new short list contact for purposes of sorting
+		contactToVisit := new(ShortListContact)
+		contactToVisit.NodeID = element.NodeID
+		contactToVisit.Host = element.Host
+		contactToVisit.Port = element.Port
+		contactToVisit.Distance = element.NodeID.Xor(id)
+
+		//add the nodes to the slice of nodes to visit
+		nodesToVisit = append(nodesToVisit,*contactToVisit)
+
+		//update closest contact
+		if contactToVisit.Distance.Less(closestContact.NodeID.Xor(id)){
+			closestContact = element
 		}
-		shortList.PushBack(element)
 	}
 
-	// for i := 0; i < alpha; i++ {
-	// 	go DoFindNode(shortList, id)
-	// }
+	//loop until we have k active contacts, or we no longer improve the list
+	for len(activeNodes)<k {
 
+	  	numCalls := 0
 
-	fmt.Println(shortList)
+		// Iterate over the nodesToVisit and send up to alpha calls, or k calls if in the last iteration
+		for _, element := range nodesToVisit {
+			numCalls++
+			if !visitedNodes[element.NodeID]{
+				contactToCall := new(Contact)
+				contactToCall.NodeID = element.NodeID
+				contactToCall.Host = element.Host
+				contactToCall.Port = element.Port
+				go kadem.DoFindNode(contactToCall, id)
+				visitedNodes[element.NodeID] =true
+			}
+			
+			if !lastIteration {
+				if numCalls >= alpha { break }
+			}else{
+				if numCalls >= k {break}
+			}
+		}
 
-	return nil, &CommandFailed{"Not implemented"}
+		//delete nodes from the list?
+		nodesToVisit = nodesToVisit[numCalls:]
+
+		for ;numCalls > 0; numCalls-- {
+			select{
+				case foundNodeResult := <- kadem.Channels.iterativeFindNodeChan:
+					if foundNodeResult.Nodes != nil { // we need to implement such that if timeout, this is nil - node is not active
+						activeNode := new(ShortListContact)
+						activeNode.NodeID = foundNodeResult.OriginalRequester.NodeID
+						activeNode.Host = foundNodeResult.OriginalRequester.Host
+						activeNode.Port = foundNodeResult.OriginalRequester.Port
+						activeNode.Distance = foundNodeResult.OriginalRequester.NodeID.Xor(id)
+						activeNodes = append(activeNodes, *activeNode)
+					}
+					
+					foundNodes := foundNodeResult.Nodes
+					//add foundNodes to list of nodesToVisit
+					for _, element := range foundNodes {
+						if !visitedNodes[element.NodeID]{
+
+							//create a new short list contact for purposes of sorting
+							contactToVisit := new(ShortListContact)
+							contactToVisit.NodeID = element.NodeID
+							contactToVisit.Host = element.Host
+							contactToVisit.Port = element.Port
+							contactToVisit.Distance = element.NodeID.Xor(id)
+
+							nodesToVisit = append(nodesToVisit, *contactToVisit)
+
+							//update closest contact
+							if contactToVisit.Distance.Less(closestContact.NodeID.Xor(id)){
+								closestContact = element
+								closestContactChanged = true
+							}
+						}
+					}
+				default:
+			}
+		}
+
+		sort.Sort(nodesToVisit)
+		
+		//check to see if this was supposed to be the last iteration
+		if lastIteration{
+			break
+		}
+
+		//check if closest contact changed, if not, begin next cycle
+		if closestContactChanged{
+			closestContactChanged = false
+		}else{
+			lastIteration = true //from Piazza, he says we could just stop here after sending the k requests
+		}
+	}
+
+	//sort active nodes
+	sort.Sort(activeNodes)
+	//convert back to contacts, return first k
+	var shortList []Contact
+	for index, element := range activeNodes {
+		if (index >= k) { break }
+		activeContact := new(Contact)
+		activeContact.NodeID = element.NodeID
+		activeContact.Host = element.Host
+		activeContact.Port = element.Port
+		shortList = append(shortList,*activeContact)
+	}
+	return shortList, nil 
 }
+
 func (k *Kademlia) DoIterativeStore(key ID, value []byte) ([]Contact, error) {
 	return nil, &CommandFailed{"Not implemented"}
 }
