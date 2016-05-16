@@ -6,7 +6,7 @@ package libkademlia
 
 import (
 	"net"
-	"fmt"
+	//"fmt"
 )
 
 type KademliaRPC struct {
@@ -38,7 +38,7 @@ type PongMessage struct {
  */
 func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: Finish implementation
-	fmt.Println(k.kademlia.SelfContact.NodeID.AsString(), "received a ping from", ping.Sender.NodeID.AsString())
+	//fmt.Println(k.kademlia.SelfContact.NodeID.AsString(), "received a ping from", ping.Sender.NodeID.AsString())
 
 
 	pong.MsgID = CopyID(ping.MsgID)
@@ -48,7 +48,7 @@ func (k *KademliaRPC) Ping(ping PingMessage, pong *PongMessage) error {
 	// TODO: CopyID or reference directly?
 
 
-	fmt.Println("I am", k.kademlia.SelfContact.NodeID.AsString(), "and I am about to send to updateContactChannel", ping.Sender.NodeID.AsString())
+	//fmt.Println("I am", k.kademlia.SelfContact.NodeID.AsString(), "and I am about to send to updateContactChannel", ping.Sender.NodeID.AsString())
 	k.kademlia.Channels.updateContactChannel<-ping.Sender
 
 
@@ -73,7 +73,7 @@ type StoreResult struct {
 
 func (k *KademliaRPC) Store(req StoreRequest, res *StoreResult) error {
 	// TODO: Implement.
-	fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
+	//fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
 	k.kademlia.Channels.storeReqChannel <- req
 	return nil
 }
@@ -130,7 +130,7 @@ type FindValueResult struct {
 
 func (k *KademliaRPC) FindValue(req FindValueRequest, res *FindValueResult) error {
 	// TODO: Implement.
-	fmt.Println("RPC FindValue got called from Sender", req.Sender.NodeID.AsString())
+	//fmt.Println("RPC FindValue got called from Sender", req.Sender.NodeID.AsString())
 	k.kademlia.Channels.findValueIncomingChannel <- req.Key
 
 	foundValue := <-k.kademlia.Channels.findValueOutgoingChannel

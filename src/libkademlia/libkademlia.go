@@ -156,25 +156,25 @@ func KBucketManager(kadem *Kademlia) {
 		 */
 		case requestedContactID := <-kadem.Channels.findContactIncomingChan:
 
-			fmt.Println("looking for", requestedContactID.AsString())
+			//fmt.Println("looking for", requestedContactID.AsString())
 
 			distance := kadem.SelfContact.NodeID.Xor(requestedContactID)
 			bucketIdx := distance.PrefixLen()
 			bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-			fmt.Println(kadem.SelfContact.NodeID.AsString(), "looking for", requestedContactID.AsString(), "where distance is", distance, "looking in bucket", bucketIdx)
+			//fmt.Println(kadem.SelfContact.NodeID.AsString(), "looking for", requestedContactID.AsString(), "where distance is", distance, "looking in bucket", bucketIdx)
 
 			if bucketIdx >= 0 {
 				bucket := kadem.Table.Buckets[bucketIdx]
 
-				fmt.Println("Bucket length is", bucket.Len())
+				//fmt.Println("Bucket length is", bucket.Len())
 
 				contactFound := false
 				for e := bucket.Front(); e != nil; e = e.Next() {
-					fmt.Println("Looking...")
+					//fmt.Println("Looking...")
 
 					elementID := (e.Value.(*Contact)).NodeID
-					fmt.Println(elementID.AsString())
+					//fmt.Println(elementID.AsString())
 					if elementID.Equals(requestedContactID){
 						contactFound =true
 						kadem.Channels.findContactOutgoingChan <- e.Value.(*Contact)
@@ -185,13 +185,13 @@ func KBucketManager(kadem *Kademlia) {
 				}
 
 				if(!contactFound) {
-					fmt.Println("couldn't find contact")
+					//fmt.Println("couldn't find contact")
 					kadem.Channels.findContactOutgoingChan <- nil
 				}
 			}
 
 		case contactToBeUpdated := <-kadem.Channels.updateContactChannel:
-			fmt.Println("KBucketManager is telling", kadem.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
+			//fmt.Println("KBucketManager is telling", kadem.SelfContact.NodeID.AsString(), "to update", contactToBeUpdated.NodeID.AsString())
 			kadem.Update(&contactToBeUpdated)
 
 		case requestedNodesSearchKey := <-kadem.Channels.findNodeIncomingChannel:
@@ -199,14 +199,14 @@ func KBucketManager(kadem *Kademlia) {
 			bucketIdx := distance.PrefixLen()
 			bucketIdx = (b - 1) - bucketIdx
 			//bucket := kadem.Table.Buckets[bucketIdx]
-			fmt.Println("starting index:", bucketIdx)
+			//fmt.Println("starting index:", bucketIdx)
 			contactArray :=make([]Contact,0,k)
 
 			//go up
 			for i := bucketIdx; i < b; i++{
 				bucket := kadem.Table.Buckets[i]
 				for e := bucket.Front(); e != nil; e = e.Next() {
-					fmt.Println(kadem.SelfContact.NodeID.AsString(), "got",bucket.Len(), "contacts in bucket ", i, "contact is: ", (e.Value.(*Contact)).NodeID.AsString())
+					//fmt.Println(kadem.SelfContact.NodeID.AsString(), "got",bucket.Len(), "contacts in bucket ", i, "contact is: ", (e.Value.(*Contact)).NodeID.AsString())
 					if(len(contactArray)>=k){
 						break;
 					}
@@ -268,14 +268,14 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 	bucketIdx := distance.PrefixLen()
 	bucketIdx = (b - 1) - bucketIdx		// flip it so the largest distance goes in the largest bucket
 
-	fmt.Println(kadem.SelfContact.NodeID.AsString(), "inserting", contact.NodeID.AsString(), "into bucket", bucketIdx, "that has length", kadem.Table.Buckets[bucketIdx].Len() )
+	//fmt.Println(kadem.SelfContact.NodeID.AsString(), "inserting", contact.NodeID.AsString(), "into bucket", bucketIdx, "that has length", kadem.Table.Buckets[bucketIdx].Len() )
 
 	if bucketIdx >= 0 {
 		bucket := kadem.Table.Buckets[bucketIdx]
 		contactExists := false
 		for e := bucket.Front(); e != nil; e = e.Next() {
 			elementID := (e.Value.(*Contact)).NodeID
-			fmt.Println(elementID.AsString())
+			//fmt.Println(elementID.AsString())
 			if elementID.Equals(contact.NodeID){
 				contactExists = true
 				//TODO: might need to pass this to a go routine later
@@ -289,7 +289,7 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 		//If the contact does not exist and the k-bucket is not full: create a new contact for the node and place at the tail of the k-bucket.
 			bucket.PushBack(contact)
 
-			fmt.Println(kadem.SelfContact.NodeID.AsString(), "has inserted", contact.NodeID.AsString())
+			//fmt.Println(kadem.SelfContact.NodeID.AsString(), "has inserted", contact.NodeID.AsString())
 
 			// for e := bucket.Front(); e != nil; e = e.Next() {
 			// 	elementID := (e.Value.(*Contact)).NodeID
@@ -299,7 +299,7 @@ func (kadem *Kademlia) Update(contact *Contact) error {
 		} else if !contactExists && bucket.Len() >= k {
 			//If the contact does not exist and the k-bucket is full: ping the least recently contacted node (at the head of the k-bucket), if that contact fails to respond, drop it and append new contact to tail, otherwise ignore the new contact and update least recently seen contact.
 			frontNode := bucket.Front().Value.(*Contact)
-			fmt.Println(frontNode.NodeID.AsString())
+			//fmt.Println(frontNode.NodeID.AsString())
 			_, err := kadem.DoPing(frontNode.Host, frontNode.Port)
 			if err != nil{
 				//we didn't get a response
@@ -328,7 +328,7 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 
 	hostname:=host.String()
 	portString := strconv.Itoa(int(port))
-	log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
 	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
 		rpc.DefaultRPCPath+portString)
 	if err != nil {
@@ -347,9 +347,9 @@ func (k *Kademlia) DoPing(host net.IP, port uint16) (*Contact, error) {
 
 	case <-callRes.Done:
 		// do what you need with test.CallReply
-		log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
-		log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
-		fmt.Println("received pong from:", pong.Sender.NodeID.AsString())
+		//log.Printf("ping msgID: %s\n", ping.MsgID.AsString())
+		//log.Printf("pong msgID: %s\n\n", pong.MsgID.AsString())
+		//fmt.Println("received pong from:", pong.Sender.NodeID.AsString())
 
 		k.Channels.updateContactChannel <- pong.Sender
 		return &(pong.Sender), nil
@@ -408,34 +408,73 @@ func (k *Kademlia) DoFindNode(contact *Contact, searchKey ID) ([]Contact, error)
 	var FindNodeRes FindNodeResult
 	callRes := client.Go("KademliaRPC.FindNode", FindNodeReq, &FindNodeRes, nil)
 
+	fmt.Println("Inside do find node called by", k.SelfContact.NodeID.AsString(), "on", contact.NodeID.AsString())
 	select {
 
 	case <-callRes.Done:
+		//fmt.Println("Do Find Node Call Returned")
+		for i:=0; i<len(FindNodeRes.Nodes);i++{
+			k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
+		}
+
+		return FindNodeRes.Nodes, FindNodeRes.Err
+
+	case <-time.After(300 * time.Millisecond):
+		// handle call failing
+		return nil, &CommandFailed{"Timeout"}
+	}
+}
+
+func (k *Kademlia) DoIterativeFindNodeHelper(contact *Contact, searchKey ID) ([]Contact, error) {
+	hostname := contact.Host.String()
+	portString := strconv.Itoa(int(contact.Port))
+
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	FindNodeReq := new(FindNodeRequest)
+	FindNodeReq.MsgID = NewRandomID()
+	FindNodeReq.Sender = k.SelfContact
+	FindNodeReq.NodeID = searchKey
+
+	var FindNodeRes FindNodeResult
+	callRes := client.Go("KademliaRPC.FindNode", FindNodeReq, &FindNodeRes, nil)
+
+	fmt.Println("Inside do find node called by", k.SelfContact.NodeID.AsString(), "on", contact.NodeID.AsString())
+	select {
+
+	case <-callRes.Done:
+		//fmt.Println("Do Find Node Call Returned")
 		for i:=0; i<len(FindNodeRes.Nodes);i++{
 			k.Channels.updateContactChannel <- FindNodeRes.Nodes[i]
 		}
 
 		IterativeFindNodeRes := new(IterativeFindNodeResult)
-		IterativeFindNodeRes.MsgID = FindNodeRes.MsgID
+		IterativeFindNodeRes.MsgID = CopyID(FindNodeRes.MsgID)
 		IterativeFindNodeRes.Nodes = FindNodeRes.Nodes
 		IterativeFindNodeRes.Err = FindNodeRes.Err
-		IterativeFindNodeRes.OriginalRequester = k.SelfContact
+		IterativeFindNodeRes.OriginalRequester = *contact
 
 		k.Channels.iterativeFindNodeChan <- *IterativeFindNodeRes
 
 		return FindNodeRes.Nodes, FindNodeRes.Err
 
-	case <-time.After(2500 * time.Millisecond):
+	case <-time.After(300 * time.Millisecond):
 		// handle call failing
 		IterativeFindNodeResFail := new(IterativeFindNodeResult)
-		IterativeFindNodeResFail.MsgID = FindNodeRes.MsgID
+		IterativeFindNodeResFail.MsgID = NewRandomID()
 		IterativeFindNodeResFail.Nodes = nil
 		IterativeFindNodeResFail.Err = FindNodeRes.Err
-		IterativeFindNodeResFail.OriginalRequester = k.SelfContact
+		IterativeFindNodeResFail.OriginalRequester = *contact
 		k.Channels.iterativeFindNodeChan <- *IterativeFindNodeResFail
 		return nil, &CommandFailed{"Timeout"}
 	}
 }
+
+
 
 func (k *Kademlia) DoFindValue(contact *Contact,
 	searchKey ID) (value []byte, contacts []Contact, err error) {
@@ -508,7 +547,7 @@ func (slice ShortListContacts) Swap(i, j int) {
 func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 	var activeNodes ShortListContacts
 	var nodesToVisit ShortListContacts
-	var visitedNodes map[ID]bool
+	visitedNodes := make(map[ID]bool)
 	var closestContact Contact
 
 	closestContactChanged := false
@@ -516,9 +555,10 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 
 	kadem.Channels.findNodeIncomingChannel <- id
 	foundNodes := <- kadem.Channels.findNodeOutgoingChannel
+	fmt.Println(len(foundNodes))
 	//initialize...
 	closestContact = foundNodes[0]
-
+	fmt.Println(closestContact.NodeID.AsString())
 	//Prepare the first iteration of alpha contacts
 	for index, element := range foundNodes {
 		if (index >= alpha) { break }
@@ -532,7 +572,7 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 
 		//add the nodes to the slice of nodes to visit
 		nodesToVisit = append(nodesToVisit,*contactToVisit)
-
+		fmt.Println((*contactToVisit).NodeID.AsString(), "appended")
 		//update closest contact
 		if contactToVisit.Distance.Less(closestContact.NodeID.Xor(id)){
 			closestContact = element
@@ -546,13 +586,14 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 
 		// Iterate over the nodesToVisit and send up to alpha calls, or k calls if in the last iteration
 		for _, element := range nodesToVisit {
-			numCalls++
 			if !visitedNodes[element.NodeID]{
+				numCalls++
 				contactToCall := new(Contact)
 				contactToCall.NodeID = element.NodeID
 				contactToCall.Host = element.Host
 				contactToCall.Port = element.Port
-				go kadem.DoFindNode(contactToCall, id)
+				go kadem.DoIterativeFindNodeHelper(contactToCall, CopyID(id))
+				fmt.Println((contactToCall).NodeID.AsString(), "called to find node")
 				visitedNodes[element.NodeID] =true
 			}
 			
@@ -565,10 +606,15 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 
 		//delete nodes from the list?
 		nodesToVisit = nodesToVisit[numCalls:]
+		fmt.Println("numCalls:", numCalls)
 
-		for ;numCalls > 0; numCalls-- {
+		for ;numCalls > 0;{
 			select{
 				case foundNodeResult := <- kadem.Channels.iterativeFindNodeChan:
+					numCalls--
+					fmt.Println("numCalls after decrement:", numCalls)
+					fmt.Println(foundNodeResult.OriginalRequester.NodeID.AsString(), "returned from call")
+					fmt.Println("Num nodes returned:" ,len(foundNodeResult.Nodes))
 					if foundNodeResult.Nodes != nil { // we need to implement such that if timeout, this is nil - node is not active
 						activeNode := new(ShortListContact)
 						activeNode.NodeID = foundNodeResult.OriginalRequester.NodeID
@@ -581,15 +627,15 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 					foundNodes := foundNodeResult.Nodes
 					//add foundNodes to list of nodesToVisit
 					for _, element := range foundNodes {
+						fmt.Println("Node returned with ID:", element.NodeID.AsString())
 						if !visitedNodes[element.NodeID]{
-
 							//create a new short list contact for purposes of sorting
 							contactToVisit := new(ShortListContact)
 							contactToVisit.NodeID = element.NodeID
 							contactToVisit.Host = element.Host
 							contactToVisit.Port = element.Port
 							contactToVisit.Distance = element.NodeID.Xor(id)
-
+							
 							nodesToVisit = append(nodesToVisit, *contactToVisit)
 
 							//update closest contact
@@ -600,6 +646,7 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 						}
 					}
 				default:
+					//fmt.Println("in default case")
 			}
 		}
 
@@ -629,7 +676,10 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 		activeContact.Host = element.Host
 		activeContact.Port = element.Port
 		shortList = append(shortList,*activeContact)
+		fmt.Println("added node to short list:", activeContact.NodeID.AsString())
 	}
+
+	fmt.Println("length of short list:", len(shortList))
 	return shortList, nil 
 }
 
