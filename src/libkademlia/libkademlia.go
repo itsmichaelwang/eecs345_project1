@@ -622,29 +622,33 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 						activeNode.Port = foundNodeResult.OriginalRequester.Port
 						activeNode.Distance = foundNodeResult.OriginalRequester.NodeID.Xor(id)
 						activeNodes = append(activeNodes, *activeNode)
-					}
-					
-					foundNodes := foundNodeResult.Nodes
-					//add foundNodes to list of nodesToVisit
-					for _, element := range foundNodes {
-						fmt.Println("Node returned with ID:", element.NodeID.AsString())
-						if !visitedNodes[element.NodeID]{
-							//create a new short list contact for purposes of sorting
-							contactToVisit := new(ShortListContact)
-							contactToVisit.NodeID = element.NodeID
-							contactToVisit.Host = element.Host
-							contactToVisit.Port = element.Port
-							contactToVisit.Distance = element.NodeID.Xor(id)
-							
-							nodesToVisit = append(nodesToVisit, *contactToVisit)
 
-							//update closest contact
-							if contactToVisit.Distance.Less(closestContact.NodeID.Xor(id)){
-								closestContact = element
-								closestContactChanged = true
+						foundNodes := foundNodeResult.Nodes
+						//add foundNodes to list of nodesToVisit
+						for _, element := range foundNodes {
+							fmt.Println("Node returned with ID:", element.NodeID.AsString())
+							if !visitedNodes[element.NodeID]{
+								//create a new short list contact for purposes of sorting
+								contactToVisit := new(ShortListContact)
+								contactToVisit.NodeID = element.NodeID
+								contactToVisit.Host = element.Host
+								contactToVisit.Port = element.Port
+								contactToVisit.Distance = element.NodeID.Xor(id)
+								
+								nodesToVisit = append(nodesToVisit, *contactToVisit)
+
+								//update closest contact
+								if contactToVisit.Distance.Less(closestContact.NodeID.Xor(id)){
+									closestContact = element
+									closestContactChanged = true
+								}
 							}
 						}
+
+					} else {
+						fmt.Println("Node inactive")
 					}
+					
 				default:
 					//fmt.Println("in default case")
 			}
