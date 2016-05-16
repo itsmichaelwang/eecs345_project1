@@ -263,3 +263,58 @@ func TestIterativeFindNode(t *testing.T) {
 
 	return
 }
+
+func TestIterativeFindValue(t *testing.T) {
+	// tree structure;
+	// A->B->tree
+	/*
+	         C
+	      /
+	  A-B -- D
+	      \
+	         E
+	*/
+	instance1 := NewKademlia("localhost:7926")
+	instance2 := NewKademlia("localhost:7927")
+	fmt.Println("TestFindValue instance1 ID:" , instance1.SelfContact.NodeID.AsString())
+	fmt.Println("TestFindValue instance2 ID:" , instance2.SelfContact.NodeID.AsString())
+	fmt.Println()
+	host2, port2, _ := StringToIpPort("localhost:7927")
+	instance1.DoPing(host2, port2)
+	contact2, err := instance1.FindContact(instance2.NodeID)
+	if err != nil {
+		t.Error("Instance 2's contact not found in Instance 1's contact list")
+		return
+	}
+
+	tree_node := make([]*Kademlia, 10)
+	for i := 0; i < 10; i++ {
+		address := "localhost:" + strconv.Itoa(7928+i)
+		tree_node[i] = NewKademlia(address)
+		host_number, port_number, _ := StringToIpPort(address)
+		instance2.DoPing(host_number, port_number)
+	}
+
+	key := NewRandomID()
+	value := []byte("Hello world")
+	err = instance2.DoStore(contact2, key, value)
+	if err != nil {
+		t.Error("Could not store value")
+	}
+
+	// Given the right keyID, it should return the value
+	foundValue, err := instance1.DoIterativeFindValue(key)
+	if !bytes.Equal(foundValue, value) {
+		t.Error("Stored value did not match found value")
+	}
+
+	//Given the wrong keyID, it should return k nodes.
+	wrongKey := NewRandomID()
+	foundValue, err = instance1.DoIterativeFindValue(wrongKey)
+	if foundValue != nil {
+		t.Error("Searching for a wrong ID somehow found things")
+	}
+
+	// TODO: Check that the correct contacts were stored
+	//       (and no other contacts)
+}
