@@ -230,11 +230,11 @@ func TestIterativeFindNode(t *testing.T) {
 	      \
 	         E
 	*/
-	instance1 := NewKademlia("localhost:7894")
-	instance2 := NewKademlia("localhost:7895")
+	instance1 := NewKademlia("localhost:8000")
+	instance2 := NewKademlia("localhost:8001")
 	fmt.Println("Instance 1: ", instance1.NodeID.AsString())
 	fmt.Println("Instance 2: ", instance2.NodeID.AsString())
-	host2, port2, _ := StringToIpPort("localhost:7895")
+	host2, port2, _ := StringToIpPort("localhost:8001")
 	instance1.DoPing(host2, port2)
 	_, err := instance1.FindContact(instance2.NodeID)
 	if err != nil {
@@ -243,7 +243,7 @@ func TestIterativeFindNode(t *testing.T) {
 	}
 	tree_node := make([]*Kademlia, 20)
 	for i := 0; i < 20; i++ {
-		address := "localhost:" + strconv.Itoa(7896+i)
+		address := "localhost:" + strconv.Itoa(8002+i)
 		tree_node[i] = NewKademlia(address)
 		host_number, port_number, _ := StringToIpPort(address)
 		fmt.Println("New Node added to instance 2:", tree_node[i].NodeID.AsString())
@@ -274,12 +274,12 @@ func TestIterativeFindValue(t *testing.T) {
 	      \
 	         E
 	*/
-	instance1 := NewKademlia("localhost:7926")
-	instance2 := NewKademlia("localhost:7927")
+	instance1 := NewKademlia("localhost:8500")
+	instance2 := NewKademlia("localhost:8501")
 	fmt.Println("TestFindValue instance1 ID:" , instance1.SelfContact.NodeID.AsString())
 	fmt.Println("TestFindValue instance2 ID:" , instance2.SelfContact.NodeID.AsString())
 	fmt.Println()
-	host2, port2, _ := StringToIpPort("localhost:7927")
+	host2, port2, _ := StringToIpPort("localhost:8501")
 	instance1.DoPing(host2, port2)
 	contact2, err := instance1.FindContact(instance2.NodeID)
 	if err != nil {
@@ -289,7 +289,7 @@ func TestIterativeFindValue(t *testing.T) {
 
 	tree_node := make([]*Kademlia, 10)
 	for i := 0; i < 10; i++ {
-		address := "localhost:" + strconv.Itoa(7928+i)
+		address := "localhost:" + strconv.Itoa(8502+i)
 		tree_node[i] = NewKademlia(address)
 		host_number, port_number, _ := StringToIpPort(address)
 		instance2.DoPing(host_number, port_number)

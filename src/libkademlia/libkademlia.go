@@ -694,10 +694,13 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 	return shortList, nil
 }
 
-func (k *Kademlia) DoIterativeStore(key ID, value []byte) ([]Contact, error) {
-	contactArray := k.DoIterativeFindNode(key)
+func (kadem *Kademlia) DoIterativeStore(key ID, value []byte) ([]Contact, error) {
+	contactArray,err := kadem.DoIterativeFindNode(key)
+	if err != nil{
+		return nil, err
+	}
 	for _, element := range contactArray {
-		k.DoStore(element, key , value)
+		kadem.DoStore(&element, key , value)
 	}
 
 	return contactArray, nil
@@ -777,6 +780,7 @@ func (kadem *Kademlia) DoIterativeFindValue(key ID) (value []byte, err error) {
 					// fmt.Println("Num nodes returned:" ,len(foundNodeResult.Nodes))
 
 					if foundValueResult.Value != nil {
+						kadem.DoStore(&closestContact, key , foundValueResult.Value)
 						return foundValueResult.Value, nil
 					}
 
@@ -848,8 +852,8 @@ func (kadem *Kademlia) DoIterativeFindValue(key ID) (value []byte, err error) {
 		fmt.Println("added node to short list:", activeContact.NodeID.AsString())
 	}
 
-	fmt.Println("length of short list:", len(shortList))
-	return nil, &CommandFailed{"Unable to find value"}
+	//return id of the closest node to the search key
+	return nil, &CommandFailed{closestContact.NodeID.AsString()}
 }
 
 func (k *Kademlia) DoIterativeFindValueHelper(contact *Contact,
