@@ -227,8 +227,6 @@ func KBucketManager(kadem *Kademlia) {
 			}
 
 			kadem.Channels.findNodeOutgoingChannel <- contactArray
-		default:
-			//do nothing
 
 		}
 	}
@@ -250,8 +248,6 @@ func DataStoreManager(kadem *Kademlia) {
 			} else {
 				kadem.Channels.findValueOutgoingChannel <- nil
 			}
-		default:
-			//do nothing
 		}
 	}
 
@@ -655,9 +651,6 @@ func (kadem *Kademlia) DoIterativeFindNode(id ID) ([]Contact, error) {
 					} else {
 						fmt.Println("Node inactive")
 					}
-
-				default:
-					//fmt.Println("in default case")
 			}
 		}
 
@@ -817,9 +810,6 @@ func (kadem *Kademlia) DoIterativeFindValue(key ID) (value []byte, err error) {
 					} else {
 						fmt.Println("Node inactive")
 					}
-
-				default:
-					//fmt.Println("in default case")
 			}
 		}
 

@@ -75,6 +75,7 @@ func (k *KademliaRPC) Store(req StoreRequest, res *StoreResult) error {
 	// TODO: Implement.
 	//fmt.Println("RPC Store got called from Sender", req.Sender.NodeID.AsString())
 	k.kademlia.Channels.storeReqChannel <- req
+	res.MsgID = CopyID(req.MsgID)
 	return nil
 }
 
