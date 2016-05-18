@@ -52,19 +52,8 @@ func main() {
 	// printing their results to stdout. See README.txt for more details.
 
 	hostname, port, err := net.SplitHostPort(firstPeerStr)
-	ipAddrStrings, err := net.LookupHost(hostname)
-	if err != nil {
-		response = "ERR: Could not find the provided hostname"
-		return
-	}
-	var host net.IP
-	for i := 0; i < len(ipAddrStrings); i++ {
-		host = net.ParseIP(ipAddrStrings[i])
-		if host.To4() != nil {
-			break
-		}
-	}
-	kadem.DoPing(host, uint16(strconv.Atoi(port))
+	firstPeer := libkademlia.NewKademlia(firstPeerStr)
+	kadem.DoPing(firstPeer.SelfContact.Host, firstPeer.SelfContact.Port)
 
 
 	in := bufio.NewReader(os.Stdin)
