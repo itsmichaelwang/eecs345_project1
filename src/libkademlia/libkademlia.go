@@ -25,9 +25,10 @@ const (
 type Kademlia struct {
 	NodeID      	ID
 	SelfContact 	Contact
-	Table					RoutingTable
+	Table			RoutingTable
 	DataStore 		map[ID][]byte
-	Channels      KademliaChannels
+	Channels      	KademliaChannels
+	VDOStore		map[ID]VanashingDataObject
 }
 
 type RoutingTable struct {
@@ -48,7 +49,10 @@ type KademliaChannels struct {
 	findNodeOutgoingChannel   chan []Contact
 
 	iterativeFindNodeChan     chan IterativeFindNodeResult	//Project 2
-	iterativeFindValueChan 		chan IterativeFindValueResult
+	iterativeFindValueChan 	  chan IterativeFindValueResult
+	storeVDOIncomingChannel		chan VDOStoreReq						//Project 3
+	getVDOIncomingChannel		chan ID
+	getVDOOutgoingChannel		chan VanashingDataObject
 }
 
 
@@ -60,13 +64,16 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 		findContactIncomingChan: 	make(chan ID),
 		findContactOutgoingChan: 	make(chan *Contact),
 		updateContactChannel:    	make(chan Contact),
-		storeReqChannel:					make(chan StoreRequest),
+		storeReqChannel:			make(chan StoreRequest),
 		findValueIncomingChannel:	make(chan ID),
 		findValueOutgoingChannel:	make(chan []byte),
 		findNodeIncomingChannel:	make(chan ID),
 		findNodeOutgoingChannel:	make(chan []Contact),
 		iterativeFindNodeChan:		make(chan IterativeFindNodeResult),
 		iterativeFindValueChan:		make(chan IterativeFindValueResult),
+		storeVDOIncomingChannel:	make(chan VDOStoreReq),
+		getVDOIncomingChannel:		make(chan ID),
+		getVDOOutgoingChannel:		make(chan VanashingDataObject),
 	}
 
 	k.NodeID = nodeID
@@ -77,6 +84,7 @@ func NewKademliaWithId(laddr string, nodeID ID) *Kademlia {
 
 	go KBucketManager(k)
 	go DataStoreManager(k)
+	go VDOStoreManager(k)
 
 	// Set up RPC server
 	// NOTE: KademliaRPC is just a wrapper around Kademlia. This type includes
@@ -252,6 +260,27 @@ func DataStoreManager(kadem *Kademlia) {
 	}
 
 }
+
+func VDOStoreManager(kadem *Kademlia) {
+	kadem.VDOStore = make(map[ID]VanashingDataObject)
+
+	for{
+		select{
+		case vdoStoreReq := <-kadem.Channels.storeVDOIncomingChannel:
+			kadem.VDOStore[vdoStoreReq.Key] = vdoStoreReq.Vdo
+		case key := <-kadem.Channels.getVDOIncomingChannel:
+			if value, found := kadem.VDOStore[key]; found {
+				kadem.Channels.getVDOOutgoingChannel <- value
+			} else {
+				nilVDO := VanashingDataObject{0,nil,0,0}
+				kadem.Channels.getVDOOutgoingChannel <- nilVDO
+			}
+
+		}
+	}
+
+}
+
 
 func (kadem *Kademlia) Update(contact *Contact) error {
 

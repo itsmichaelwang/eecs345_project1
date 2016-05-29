@@ -175,5 +175,15 @@ type GetVDOResult struct {
 
 func (k *KademliaRPC) GetVDO(req GetVDORequest, res *GetVDOResult) error {
 	// TODO: Implement.
-	return nil
+	k.kademlia.Channels.getVDOIncomingChannel <- req.VdoID
+	foundValue := <-k.kademlia.Channels.getVDOOutgoingChannel
+
+	res.MsgID = req.MsgID
+	res.VDO = foundValue
+
+	if foundValue.Ciphertext != nil {
+		return nil
+	} else {
+		return &CommandFailed{"Could not find VDO"}
+	}
 }

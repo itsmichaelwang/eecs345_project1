@@ -7,7 +7,8 @@ import (
 	"io"
 	mathrand "math/rand"
 	"time"
-	//"sss"
+	"sss"
+	"fmt"
 )
 
 type VanashingDataObject struct {
@@ -15,6 +16,11 @@ type VanashingDataObject struct {
 	Ciphertext []byte
 	NumberKeys byte
 	Threshold  byte
+}
+
+type VDOStoreReq struct {
+	Vdo VanashingDataObject
+	Key ID
 }
 
 func GenerateRandomCryptoKey() (ret []byte) {
@@ -72,11 +78,72 @@ func decrypt(key []byte, ciphertext []byte) (text []byte) {
 	return ciphertext
 }
 
-func (k *Kademlia) VanishData(data []byte, numberKeys byte,
+func (kadem *Kademlia) VanishData(data []byte, numberKeys byte,
 	threshold byte, timeoutSeconds int) (vdo VanashingDataObject) {
+	//generate crypto key
+	cryptoKey := GenerateRandomCryptoKey()
+
+	//encrypt data
+	ciphertext:= encrypt(cryptoKey, data)
+
+	// Split the given secret into N shares of which K are required to recover the secret. Returns a map of share IDs (1-255) to shares.
+	keyIdMap, err := sss.Split(numberKeys, threshold, cryptoKey)
+
+	// create an access key (L)
+	accessKey := GenerateRandomAccessKey()
+
+	//calculate where to store the split keys
+	locationsToStoreKeyIn := CalculateSharedKeyLocations(accessKey, int64(numberKeys)) // look at second argument
+
+	//store shared keys in kademlia network
+	idx := 0
+
+	for key, value := range keyIdMap {
+		all := append([]byte{key}, value...)
+		kadem.DoIterativeStore(locationsToStoreKeyIn[idx], all)
+		idx++
+	}
+
+	fmt.Println(ciphertext,keyIdMap,err,locationsToStoreKeyIn)
+
+	//create new VDO Object
+	vdo = *new(VanashingDataObject)
+	vdo.AccessKey = accessKey
+	vdo.Ciphertext = ciphertext
+	vdo.NumberKeys = numberKeys
+	vdo.Threshold  = threshold
+
+	vdoStoreReq := *new(VDOStoreReq)
+	vdoStoreReq.Vdo = vdo
+	vdoStoreReq.Key = NewRandomID()
+
+	kadem.Channels.storeVDOIncomingChannel <- vdoStoreReq
+
 	return
 }
 
-func (k *Kademlia) UnvanishData(vdo VanashingDataObject) (data []byte) {
-	return nil
+func (kadem *Kademlia) UnvanishData(vdo VanashingDataObject) (data []byte) {
+	//find the original shared key locations
+	locationsToStoreKeyIn := CalculateSharedKeyLocations(vdo.AccessKey, int64(vdo.NumberKeys)) // look at second argument
+	numberPieces := 0
+	mapForCombine := make (map[byte][]byte)
+
+	for _, element := range locationsToStoreKeyIn {
+		if int64(numberPieces) >= int64(vdo.Threshold) {break}
+		val, err := kadem.DoIterativeFindValue(element)
+		if err != nil{
+			k := val[0]
+			v := val[1:]
+			mapForCombine[k]=v
+			numberPieces++
+		}
+	}
+
+	if int64(numberPieces) < int64(vdo.Threshold) {return nil}
+
+	combinedKey := sss.Combine(mapForCombine)
+
+	text := decrypt(combinedKey, vdo.Ciphertext) 
+
+	return text
 }

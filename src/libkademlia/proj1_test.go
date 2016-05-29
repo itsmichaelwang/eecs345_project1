@@ -220,6 +220,19 @@ func TestFindValue(t *testing.T) {
 	//       (and no other contacts)
 }
 
+
+//Explanations:
+/*
+	- We test the iterative versions in a similar way to the tests for project 1
+	- for do iterative find node, we first create the nodes, then do an iterative find to see if we're returned an array of nodes
+	- for do iterative find value, we first store a value in one of the nodes, then do an iterative find to see if we can retrieve that value
+	- for do iterative store, we store a value in a node and later check using a local find value to see if it was successfully stored.
+*/
+
+
+//Project 2 Tests
+
+
 func TestIterativeFindNode(t *testing.T) {
 	// tree structure;
 	// A->B->tree
@@ -263,6 +276,34 @@ func TestIterativeFindNode(t *testing.T) {
 
 	return
 }
+
+func TestIterativeStore(t *testing.T) {
+	// test Dostore() function and LocalFindValue() function
+	instance1 := NewKademlia("localhost:8200")
+	instance2 := NewKademlia("localhost:8201")
+	host2, port2, _ := StringToIpPort("localhost:8201")
+	instance1.DoPing(host2, port2)
+	_, err := instance1.FindContact(instance2.NodeID)
+	if err != nil {
+		t.Error("Instance 2's contact not found in Instance 1's contact list")
+		return
+	}
+	key := NewRandomID()
+	value := []byte("Hello World")
+	_, err = instance1.DoIterativeStore(key, value)
+	if err != nil {
+		t.Error("Can not store this value")
+	}
+	storedValue, err := instance2.LocalFindValue(key)
+	if err != nil {
+		t.Error("Stored value not found!")
+	}
+	if !bytes.Equal(storedValue, value) {
+		t.Error("Stored value did not match found value")
+	}
+	return
+}
+
 
 func TestIterativeFindValue(t *testing.T) {
 	// tree structure;
@@ -318,3 +359,4 @@ func TestIterativeFindValue(t *testing.T) {
 	// TODO: Check that the correct contacts were stored
 	//       (and no other contacts)
 }
+

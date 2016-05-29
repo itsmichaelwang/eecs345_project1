@@ -7,7 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"net/rpc"
+	//"net/rpc"
 	"os"
 	"strconv"
 	"strings"
@@ -51,9 +51,30 @@ func main() {
 	// Your code should loop forever, reading instructions from stdin and
 	// printing their results to stdout. See README.txt for more details.
 
-	hostname, port, err := net.SplitHostPort(firstPeerStr)
-	firstPeer := libkademlia.NewKademlia(firstPeerStr)
-	kadem.DoPing(firstPeer.SelfContact.Host, firstPeer.SelfContact.Port)
+	hostname, portstr, err := net.SplitHostPort(firstPeerStr)
+	if err != nil {
+		log.Println("ERR: Not a valid Node ID or host:port address")
+		return
+	}
+	port, err := strconv.Atoi(portstr)
+	if err != nil {
+		log.Println("ERR: Not a valid Node ID or host:port address")
+		return
+	}
+	ipAddrStrings, err := net.LookupHost(hostname)
+	if err != nil {
+		log.Println("ERR: Could not find the provided hostname")
+		return
+	}
+	var host net.IP
+	for i := 0; i < len(ipAddrStrings); i++ {
+		host = net.ParseIP(ipAddrStrings[i])
+		if host.To4() != nil {
+			break
+		}
+	}
+
+	kadem.DoPing(host, uint16(port))
 
 
 	in := bufio.NewReader(os.Stdin)
@@ -336,6 +357,41 @@ func executeLine(k *libkademlia.Kademlia, line string) (response string) {
 			response = fmt.Sprintf("OK: Found value %s", value)
 		}
 
+	case toks[0] == "vanish":
+		// performa an iterative find value
+		if len(toks) != 5 {
+			response = "usage: vanish [VDO ID] [data] [numberKeys] [threshold]"
+			return
+		}
+		_, err := libkademlia.IDFromString(toks[1])
+		if err != nil {
+			response = "ERR: Provided an invalid VDO ID (" + toks[1] + ")"
+			return
+		}
+		k.Vanish([]byte(toks[2]), []byte(toks[3])[0], []byte(toks[4])[0], 0) 
+
+	case toks[0] == "unvanish":
+		// performa an iterative find value
+		if len(toks) != 3 {
+			response = "usage: unvanish [Node ID] [VDO ID]"
+			return
+		}
+		_, err := libkademlia.IDFromString(toks[1])
+		if err != nil {
+			response = "ERR: Provided an invalid Node ID (" + toks[1] + ")"
+			return
+		}
+		vdoID, err := libkademlia.IDFromString(toks[2])
+		if err != nil {
+			response = "ERR: Provided an invalid VDO ID (" + toks[2] + ")"
+			return
+		}
+		data := k.Unvanish(vdoID) 
+		if data != nil {
+			response = fmt.Sprintf("OK")
+		} else {
+			response = fmt.Sprintf("err")
+		}
 	default:
 		response = "ERR: Unknown command"
 	}
