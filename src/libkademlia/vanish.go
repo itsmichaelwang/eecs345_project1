@@ -82,7 +82,7 @@ func (kadem *Kademlia) VanishData(vdoID ID, data []byte, numberKeys byte,
 	threshold byte, timeoutSeconds int) (vdo VanashingDataObject) {
 	//generate crypto key
 	cryptoKey := GenerateRandomCryptoKey()
-
+	fmt.Println("cryptokey:",cryptoKey)
 	//encrypt data
 	ciphertext:= encrypt(cryptoKey, data)
 
@@ -99,12 +99,17 @@ func (kadem *Kademlia) VanishData(vdoID ID, data []byte, numberKeys byte,
 	idx := 0
 
 	for key, value := range keyIdMap {
+		fmt.Println("inside loop")
 		all := append([]byte{key}, value...)
-		kadem.DoIterativeStore(locationsToStoreKeyIn[idx], all)
+		closestContacts, err := kadem.DoIterativeFindNode(locationsToStoreKeyIn[idx])
+		if err == nil{
+			kadem.DoStore(&(closestContacts[0]),locationsToStoreKeyIn[idx],all) //store it in the closest contact
+			fmt.Println ("stored", all, "in", closestContacts[0].NodeID.AsString())
+		}
 		idx++
 	}
 
-	fmt.Println(ciphertext,keyIdMap,err,locationsToStoreKeyIn)
+	fmt.Println("inside vanishdata",err)
 
 	//create new VDO Object
 	vdo = *new(VanashingDataObject)
@@ -131,10 +136,12 @@ func (kadem *Kademlia) UnvanishData(vdo VanashingDataObject) (data []byte) {
 	for _, element := range locationsToStoreKeyIn {
 		if int64(numberPieces) >= int64(vdo.Threshold) {break}
 		val, err := kadem.DoIterativeFindValue(element)
-		if err != nil{
+		fmt.Println("found val", val)
+		if err == nil && val!=nil{
 			k := val[0]
 			v := val[1:]
 			mapForCombine[k]=v
+			fmt.Println(k,v)
 			numberPieces++
 		}
 	}

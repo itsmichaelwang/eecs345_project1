@@ -360,3 +360,63 @@ func TestIterativeFindValue(t *testing.T) {
 	//       (and no other contacts)
 }
 
+
+//project 3 test
+
+func TestVanish(t *testing.T) {
+	// tree structure;
+	// A->B->tree
+	/*
+	         C
+	      /
+	  A-B -- D
+	      \
+	         E
+	*/
+	instance1 := NewKademlia("localhost:9000")
+	instance2 := NewKademlia("localhost:9001")
+	fmt.Println("TestFindValue instance1 ID:" , instance1.SelfContact.NodeID.AsString())
+	fmt.Println("TestFindValue instance2 ID:" , instance2.SelfContact.NodeID.AsString())
+
+	host2, port2, _ := StringToIpPort("localhost:9001")
+	instance1.DoPing(host2, port2)
+	_, err := instance1.FindContact(instance2.NodeID)
+	if err != nil {
+		t.Error("Instance 2's contact not found in Instance 1's contact list")
+		return
+	}
+
+	tree_node := make([]*Kademlia, 5)
+	for i := 0; i < 5; i++ {
+		address := "localhost:" + strconv.Itoa(9002+i)
+		tree_node[i] = NewKademlia(address)
+		//fmt.Println("added node:", tree_node[i].SelfContact.NodeID.AsString())
+		host_number, port_number, _ := StringToIpPort(address)
+		instance2.DoPing(host_number, port_number)
+	}
+
+	//vanish it
+	vdoID := NewRandomID()
+	data := []byte("Hello data")
+	numberKeys := byte(5)
+	threshold := byte(2)
+	timeoutSeconds :=0
+	instance2.Vanish(vdoID,data,numberKeys,threshold,timeoutSeconds)
+
+	//unvanish it
+	//ask instance 1 to unvanish it
+	
+	returnedData := instance1.Unvanish(instance2.NodeID, vdoID)
+
+	// It should be the same
+	if !bytes.Equal(data, returnedData) {
+		t.Error("Stored value did not match found value")
+		fmt.Println(string(data), string(returnedData))
+	}
+
+	fmt.Println("outside", string(data), string(returnedData))
+	
+
+
+}
+
