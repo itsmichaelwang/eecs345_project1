@@ -363,12 +363,22 @@ func executeLine(k *libkademlia.Kademlia, line string) (response string) {
 			response = "usage: vanish [VDO ID] [data] [numberKeys] [threshold]"
 			return
 		}
-		_, err := libkademlia.IDFromString(toks[1])
+		vdoID , err := libkademlia.IDFromString(toks[1])
 		if err != nil {
 			response = "ERR: Provided an invalid VDO ID (" + toks[1] + ")"
 			return
 		}
-		k.Vanish([]byte(toks[2]), []byte(toks[3])[0], []byte(toks[4])[0], 0) 
+		numberKeys, err := strconv.Atoi(toks[3])
+		if err != nil {
+			response = "ERR: Provided an invalid numberKeys (" + toks[3] + ")"
+			return
+		}
+		threshold, err := strconv.Atoi(toks[4])
+		if err != nil {
+			response = "ERR: Provided an invalid threshold (" + toks[4] + ")"
+			return
+		}
+		k.Vanish(vdoID, []byte(toks[2]), byte(numberKeys), byte(threshold), 0) 
 
 	case toks[0] == "unvanish":
 		// performa an iterative find value
@@ -376,7 +386,7 @@ func executeLine(k *libkademlia.Kademlia, line string) (response string) {
 			response = "usage: unvanish [Node ID] [VDO ID]"
 			return
 		}
-		_, err := libkademlia.IDFromString(toks[1])
+		nodeID, err := libkademlia.IDFromString(toks[1])
 		if err != nil {
 			response = "ERR: Provided an invalid Node ID (" + toks[1] + ")"
 			return
@@ -386,7 +396,7 @@ func executeLine(k *libkademlia.Kademlia, line string) (response string) {
 			response = "ERR: Provided an invalid VDO ID (" + toks[2] + ")"
 			return
 		}
-		data := k.Unvanish(vdoID) 
+		data := k.Unvanish(nodeID, vdoID) 
 		if data != nil {
 			response = fmt.Sprintf("OK")
 		} else {

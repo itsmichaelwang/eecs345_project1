@@ -922,11 +922,68 @@ func (k *Kademlia) DoIterativeFindValueHelper(contact *Contact,
 }
 
 // For project 3!
-func (k *Kademlia) Vanish(data []byte, numberKeys byte,
+func (k *Kademlia) Vanish(vdoID ID, data []byte, numberKeys byte,
 	threshold byte, timeoutSeconds int) (vdo VanashingDataObject) {
+	vdo = k.VanishData(vdoID, data, numberKeys, threshold, timeoutSeconds)
 	return
 }
 
-func (k *Kademlia) Unvanish(searchKey ID) (data []byte) {
+func (k *Kademlia) Unvanish(nodeID ID, vdoID ID) (data []byte) {
+	
+	//you could check locally if you have the node, if not, 
+	//try to find it using the iterative FindNode function. 
+	//If you cannot find that exact node, then you can just return nil (you can also add an error to the return if you wish). 
+
+	//check locally for node
+	contact, err := k.FindContact(nodeID)
+	if err == nil{
+		//found the contact, contact it for the vdo
+		data = k.DoUnvanish(contact, vdoID)
+		return // this should do a naked return... I think...
+	} else {
+		// do iterative find node
+		contactArr, err := k.DoIterativeFindNode(nodeID)
+		if err == nil {
+			for _, node := range contactArr {
+				if node.NodeID.Equals(nodeID) {
+					data = k.DoUnvanish(&node, vdoID)
+					return
+				}
+			}
+		}
+	}
+
+	//either we had an error somewhere or we couldn't find the node
 	return nil
+}
+
+func (k *Kademlia) DoUnvanish(contact *Contact, vdoID ID) (data []byte) {
+
+	hostname:=contact.Host.String()
+	portString := strconv.Itoa(int(contact.Port))
+	//log.Println("hostname:",hostname, "port:", portString, "RPCPath:",rpc.DefaultRPCPath+hostname+portString)
+	client, err := rpc.DialHTTPPath("tcp", hostname+":"+portString,
+		rpc.DefaultRPCPath+portString)
+	if err != nil {
+		log.Fatal("DialHTTP: ", err)
+	}
+
+	GetVDOReq := new(GetVDORequest)
+	GetVDOReq.Sender = k.SelfContact
+	GetVDOReq.VdoID = vdoID
+	GetVDOReq.MsgID = NewRandomID()
+
+	var GetVDORes GetVDOResult
+	err = client.Call("KademliaRPC.GetVDO", GetVDOReq, &GetVDORes)
+	if err != nil {
+		log.Fatal("Call: ", err)
+	}
+
+	if GetVDORes.VDO.Ciphertext != nil { // we set it so that if it's nil, that means we couldn't find it
+		data = k.UnvanishData(GetVDORes.VDO)
+		return
+	}else{
+		//couldn't find 
+		return nil
+	}
 }

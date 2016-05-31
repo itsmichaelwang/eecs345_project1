@@ -78,7 +78,7 @@ func decrypt(key []byte, ciphertext []byte) (text []byte) {
 	return ciphertext
 }
 
-func (kadem *Kademlia) VanishData(data []byte, numberKeys byte,
+func (kadem *Kademlia) VanishData(vdoID ID, data []byte, numberKeys byte,
 	threshold byte, timeoutSeconds int) (vdo VanashingDataObject) {
 	//generate crypto key
 	cryptoKey := GenerateRandomCryptoKey()
@@ -93,7 +93,7 @@ func (kadem *Kademlia) VanishData(data []byte, numberKeys byte,
 	accessKey := GenerateRandomAccessKey()
 
 	//calculate where to store the split keys
-	locationsToStoreKeyIn := CalculateSharedKeyLocations(accessKey, int64(numberKeys)) // look at second argument
+	locationsToStoreKeyIn := CalculateSharedKeyLocations(accessKey, int64(numberKeys)) // look at second argument - correct according to Piazza
 
 	//store shared keys in kademlia network
 	idx := 0
@@ -115,7 +115,7 @@ func (kadem *Kademlia) VanishData(data []byte, numberKeys byte,
 
 	vdoStoreReq := *new(VDOStoreReq)
 	vdoStoreReq.Vdo = vdo
-	vdoStoreReq.Key = NewRandomID()
+	vdoStoreReq.Key =  vdoID // can also use NewRandomID()?
 
 	kadem.Channels.storeVDOIncomingChannel <- vdoStoreReq
 
